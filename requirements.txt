@@ -5,4 +5,4 @@ twilio
 pulp
 python-dotenv
 requests
-google-genai
+google-generativeai

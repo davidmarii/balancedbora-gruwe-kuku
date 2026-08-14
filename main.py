@@ -26,7 +26,7 @@ load_dotenv()
 # ============================================================
 # GEMINI IMPORT
 # ============================================================
-from google import genai
+import google.generativeai as genai
 
 app = FastAPI(title="BalancedBora Gruwe-Kuku Bot")
 os.makedirs("static", exist_ok=True)
@@ -46,11 +46,12 @@ client = Client(TWILIO_SID, TWILIO_TOKEN) if TWILIO_SID else None
 # ============================================================
 # GEMINI CLIENT
 # ============================================================
-gemini_client = None
+gemini_model = None
 if GEMINI_API_KEY:
     try:
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        print("[GEMINI] Client initialized successfully")
+        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+        print("[GEMINI] Configured successfully with google-generativeai")
     except Exception as e:
         print(f"[GEMINI] Init failed: {e}")
 
@@ -871,7 +872,7 @@ def detect_language(text: str) -> str:
 
 def gemini_parse_natural_language(text: str, current_lang: str = 'en'):
     """Use Gemini to parse natural language like 'Nina nguruwe na mahindi'"""
-    if not gemini_client:
+    if not gemini_model:
         return None
 
     prompt = f"""You are a Kenyan farming assistant parser. Extract structured data from the farmer's message.
@@ -905,10 +906,7 @@ Respond ONLY with valid JSON in this exact format:
 }}"""
 
     try:
-        response = gemini_client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
+        response = gemini_model.generate_content(prompt)
         raw = response.text.strip()
         # Clean markdown
         if raw.startswith("```json"): raw = raw[7:]
@@ -1049,7 +1047,7 @@ async def whatsapp_webhook(
         text in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii'] and session.get('ai_detected_feeds')
     )
 
-    if gemini_client and not is_menu_command and len(text) > 2:
+    if gemini_model and not is_menu_command and len(text) > 2:
         gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
         if gemini_data and gemini_data.get('confidence', 0) >= 0.6:
             intent = gemini_data.get('intent', 'unknown')
