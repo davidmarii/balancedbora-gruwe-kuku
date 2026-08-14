@@ -1,7 +1,8 @@
-fastapi 
-uvicorn 
-twilio 
-python-dotenv 
-pulp 
-requests 
-python-multipart 
+fastapi
+uvicorn
+python-multipart
+twilio
+pulp
+python-dotenv
+requests
+google-genai

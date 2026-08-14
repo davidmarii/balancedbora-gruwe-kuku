@@ -1,15 +1,17 @@
 # ============================================================
-# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v1.0
+# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.0 (Gemini Edition)
 # Standalone: Pigs (Gruwe) + Chickens (Kuku)
 # Features: NRC LP + Best-Effort + Background Tasks + LRU Cache
 # + Native Translations (English, Swahili, Kikuyu, Kimeru)
-# NO API DEPENDENCY — works offline, instant, forever
+# + GEMINI NLP — understand natural language like "Nina nguruwe na mahindi"
+# NO API DEPENDENCY for core logic — works offline, instant, forever
 # ============================================================
 
 import os
 import requests
 import base64
 import time
+import json
 from functools import lru_cache
 from fastapi import FastAPI, Form, Request, BackgroundTasks
 from fastapi.responses import Response
@@ -20,6 +22,11 @@ import pulp
 
 from dotenv import load_dotenv
 load_dotenv()
+
+# ============================================================
+# GEMINI IMPORT
+# ============================================================
+from google import genai
 
 app = FastAPI(title="BalancedBora Gruwe-Kuku Bot")
 os.makedirs("static", exist_ok=True)
@@ -32,13 +39,26 @@ TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "whatsapp:+254703709346")
 GOOGLE_API_KEY = os.getenv("GOOGLE_VISION_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 client = Client(TWILIO_SID, TWILIO_TOKEN) if TWILIO_SID else None
+
+# ============================================================
+# GEMINI CLIENT
+# ============================================================
+gemini_client = None
+if GEMINI_API_KEY:
+    try:
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        print("[GEMINI] Client initialized successfully")
+    except Exception as e:
+        print(f"[GEMINI] Init failed: {e}")
 
 # ============================================================
 # SESSIONS
 # ============================================================
 user_sessions = {}
+
 # ============================================================
 # NATIVE TRANSLATION SYSTEM
 # ============================================================
@@ -85,6 +105,10 @@ MESSAGES = {
         'supplier_header': "📦 WHERE TO BUY:",
         'supplier_item': "• {name} — {phone} ({location}) — stocks: {stock}",
         'supplier_na': "📦 Supplier info not yet loaded. Add your local agrovet contacts.",
+        'gemini_fallback': "🤖 I understood: you have {animal} and {feeds}.\n\n{next_step}",
+        'ask_stage_pig': "Which stage?\n1️⃣ Weaner (10-20kg)\n2️⃣ Grower (20-50kg)\n3️⃣ Finisher (50-100kg)\n4️⃣ Gestating Sow\n5️⃣ Lactating Sow",
+        'ask_stage_chicken': "Which stage?\n1️⃣ Broiler Starter (0-3 wks)\n2️⃣ Broiler Grower (3-6 wks)\n3️⃣ Broiler Finisher (6-8 wks)\n4️⃣ Layer Starter (0-6 wks)\n5️⃣ Layer Grower (6-18 wks)\n6️⃣ Laying Hen (18+ wks)",
+        'ask_more_feeds': "You need at least 2 feeds (1 energy + 1 protein). Please send more feed numbers.",
     },
     'sw': {
         'welcome': "🐷🐔 Karibu BalancedBora Gruwe-Kuku!\n\nNakuhesabu chakula bora kwa gharama nafuu kwa nguruwe au kuku wako.",
@@ -126,6 +150,10 @@ MESSAGES = {
         'supplier_header': "📦 MAHALI PA KUNUNUA:",
         'supplier_item': "• {name} — {phone} ({location}) — {stock}",
         'supplier_na': "📦 Taarifa ya muuzaji bado haijawekwa. Ongeza mawasiliano ya agrovet yako.",
+        'gemini_fallback': "🤖 Nimeelewa: una {animal} na {feeds}.\n\n{next_step}",
+        'ask_stage_pig': "Ni hatua gani?\n1️⃣ Mtoto (10-20kg)\n2️⃣ Mkubwa (20-50kg)\n3️⃣ Mwisho (50-100kg)\n4️⃣ Tumbili Mjamzito\n5️⃣ Tumbili Ananyonyesha",
+        'ask_stage_chicken': "Ni hatua gani?\n1️⃣ Broiler Mwanzo (0-3 wiki)\n2️⃣ Broiler Mkubwa (3-6 wiki)\n3️⃣ Broiler Mwisho (6-8 wiki)\n4️⃣ Layer Mwanzo (0-6 wiki)\n5️⃣ Layer Mkubwa (6-18 wiki)\n6️⃣ Layer Mzima (18+ wiki)",
+        'ask_more_feeds': "Unahitaji chakula angalau 2 (1 nishati + 1 proteini). Tafadhali tuma namba zaidi za chakula.",
     },
     'ki': {
         'welcome': "🐷🐔 Wî mwega BalancedBora Gruwe-Kuku!\n\nNîndîrathîrîria irio rîtheru ya nguruwe kana ngûkû.",
@@ -167,6 +195,10 @@ MESSAGES = {
         'supplier_header': "📦 MAHALI PA KûGûRA:",
         'supplier_item': "• {name} — {phone} ({location}) — {stock}",
         'supplier_na': "📦 Taarifa ya mûgûrî bado ti îkî. Ongeza mawasiliano ya agrovet yaku.",
+        'gemini_fallback': "🤖 Nîmenya: ûna {animal} na {feeds}.\n\n{next_step}",
+        'ask_stage_pig': "Ni hatua iriku?\n1️⃣ Kîhîî (10-20kg)\n2️⃣ Mûnene (20-50kg)\n3️⃣ Mûthî (50-100kg)\n4️⃣ Tumbili Mûkûrû\n5️⃣ Tumbili Kûnyonithia",
+        'ask_stage_chicken': "Ni hatua iriku?\n1️⃣ Broiler Kîhîî (0-3 wiki)\n2️⃣ Broiler Mûnene (3-6 wiki)\n3️⃣ Broiler Mûthî (6-8 wiki)\n4️⃣ Layer Kîhîî (0-6 wiki)\n5️⃣ Layer Mûnene (6-18 wiki)\n6️⃣ Layer Mûkûrû (18+ wiki)",
+        'ask_more_feeds': "Wîna bata irio 2 (1 hoti + 1 proteini). Tafadhali tûma namba ingî cia irio.",
     },
     'mer': {
         'welcome': "🐷🐔 Urova BalancedBora Gruwe-Kuku!\n\nNtathimana irio theru ya nguruwe kana ngûkû.",
@@ -208,6 +240,10 @@ MESSAGES = {
         'supplier_header': "📦 MAHALI PA KûGûRA:",
         'supplier_item': "• {name} — {phone} ({location}) — {stock}",
         'supplier_na': "📦 Taarifa ya mûgûrî bado ti îkî. Ongeza mawasiliano ya agrovet yaku.",
+        'gemini_fallback': "🤖 Nîmenya: ûna {animal} na {feeds}.\n\n{next_step}",
+        'ask_stage_pig': "Ni hatua iriku?\n1️⃣ Kîhîî (10-20kg)\n2️⃣ Mûnene (20-50kg)\n3️⃣ Mûthî (50-100kg)\n4️⃣ Tumbili Mûkûrû\n5️⃣ Tumbili Kûnyonithia",
+        'ask_stage_chicken': "Ni hatua iriku?\n1️⃣ Broiler Kîhîî (0-3 wiki)\n2️⃣ Broiler Mûnene (3-6 wiki)\n3️⃣ Broiler Mûthî (6-8 wiki)\n4️⃣ Layer Kîhîî (0-6 wiki)\n5️⃣ Layer Mûnene (6-18 wiki)\n6️⃣ Layer Mûkûrû (18+ wiki)",
+        'ask_more_feeds': "Wîna bata irio 2 (1 hoti + 1 proteini). Tafadhali tûma namba ingî cia irio.",
     }
 }
 
@@ -220,8 +256,9 @@ def get_msg(phone, key, **kwargs):
         except:
             pass
     return text
+
 # ============================================================
-# NUMBER -> FEED ID MAPPING (17 feeds shared)
+# NUMBER -> FEED ID MAPPING (21 feeds)
 # ============================================================
 FEED_NUMBER_MAP = {
     '1': 'maize_grain', '2': 'wheat_bran', '3': 'rice_bran',
@@ -347,6 +384,7 @@ FEEDS_DB = {
         'category': 'protein', 'notes': 'Moderate protein, high fiber'
     },
 }
+
 # ============================================================
 # ANIMAL PROFILES — PIGS (NRC 2012 based)
 # ============================================================
@@ -439,7 +477,7 @@ CHICKEN_PROFILES = {
 ALL_PROFILES = {**PIG_PROFILES, **CHICKEN_PROFILES}
 
 # ============================================================
-# SUPPLIER DATABASE — Populate manually or scrape later
+# SUPPLIER DATABASE
 # ============================================================
 SUPPLIERS_DB = [
     {'name': 'KALRO Naivasha', 'phone': '0722-XXX-XXX', 'location': 'Naivasha', 
@@ -455,13 +493,13 @@ SUPPLIERS_DB = [
 ]
 
 def find_suppliers_for_feeds(feed_ids):
-    """Return suppliers that stock at least one of the selected feeds."""
     matched = []
     for sup in SUPPLIERS_DB:
         has_any = any(f in sup['feeds'] for f in feed_ids)
         if has_any:
             matched.append(sup)
     return matched
+
 # ============================================================
 # AI SUGGESTION ENGINE
 # ============================================================
@@ -650,6 +688,7 @@ def solve_ration(profile_key, selected_feeds):
 @lru_cache(maxsize=256)
 def cached_solve_ration(profile_key: str, selected_feeds_tuple: tuple):
     return solve_ration(profile_key, list(selected_feeds_tuple))
+
 # ============================================================
 # IMAGE RECOGNITION (Google Vision)
 # ============================================================
@@ -769,6 +808,181 @@ def process_ration_and_reply(phone: str, profile_key: str, feed_ids: list, lang:
             print(f"[BG TASK] FAILED to send to {phone}: {e}")
     else:
         print(f"[BG TASK] No Twilio client, cannot send to {phone}")
+
+# ============================================================
+# GEMINI NATURAL LANGUAGE UNDERSTANDING
+# ============================================================
+FEED_NAME_TO_NUMBER = {
+    'maize': '1', 'mahindi': '1', 'corn': '1', 'mubî': '1',
+    'wheat_bran': '2', 'makapi_ya_ngano': '2', 'ngano': '2', 'bran': '2',
+    'rice_bran': '3', 'makapi_ya_mchele': '3', 'mchel': '3', 'mchele': '3',
+    'sorghum': '4', 'mtama': '4',
+    'cassava_chips': '5', 'muhogo': '5', 'cassava': '5', 'manioc': '5',
+    'soybean_meal': '6', 'soya': '6', 'soybean': '6', 'mlo_wa_soya': '6',
+    'sunflower_cake': '7', 'keki_ya_alizeti': '7', 'alizeti': '7', 'sunflower': '7',
+    'cottonseed_cake': '8', 'keki_ya_pamba': '8', 'pamba': '8', 'cotton': '8',
+    'fish_meal': '9', 'mlo_wa_samaki': '9', 'samaki': '9', 'mlo_wa_thamaki': '9', 'fish': '9',
+    'blood_meal': '10', 'mlo_wa_damu': '10', 'damu': '10', 'mlo_wa_rutî': '10', 'blood': '10',
+    'limestone': '11', 'mawe_ya_chokaa': '11', 'chokaa': '11', 'lime': '11',
+    'dicalcium_phosphate': '12', 'dcp': '12', 'phosphate': '12',
+    'oyster_shell': '13', 'oyster': '13', 'shell': '13',
+    'vitamin_mineral_premix': '14', 'premix': '14', 'vitamin': '14', 'mineral': '14',
+    'salt': '15', 'chumvi': '15',
+    'methionine': '16',
+    'lysine': '17',
+    'sweet_potato_vines': '18', 'majani_ya_viazi': '18', 'viazi': '18', 'vines': '18',
+    'lucerne_hay': '19', 'majani_ya_lucerne': '19', 'lucerne': '19', 'alfalfa': '19',
+    'grass_hay': '20', 'majani_ya_nyasi': '20', 'nyasi': '20', 'grass': '20', 'hay': '20',
+    'brewers_grains': '21', 'makapi_ya_bia': '21', 'bia': '21', 'brewer': '21', 'beer': '21',
+}
+
+STAGE_MAP = {
+    'weaner': 'p1', 'grower': 'p2', 'finisher': 'p3',
+    'gestating_sow': 'p4', 'gestating': 'p4', 'sow': 'p4', 'pregnant': 'p4',
+    'lactating_sow': 'p5', 'lactating': 'p5', 'nursing': 'p5',
+    'broiler_starter': 'c1', 'broiler_start': 'c1',
+    'broiler_grower': 'c2',
+    'broiler_finisher': 'c3', 'broiler_finish': 'c3',
+    'layer_starter': 'c4', 'layer_start': 'c4',
+    'layer_grower': 'c5',
+    'laying_hen': 'c6', 'laying': 'c6', 'layer': 'c6', 'egg': 'c6',
+}
+
+SPECIES_MAP = {
+    'pig': 'pig', 'nguruwe': 'pig', 'gruwe': 'pig', 'hog': 'pig', 'swine': 'pig',
+    'chicken': 'chicken', 'kuku': 'chicken', 'nguku': 'chicken', 'hen': 'chicken', 'broiler': 'chicken', 'layer': 'chicken',
+}
+
+LANG_DETECT_MAP = {
+    'sw': ['nina', 'na', 'tafadhali', 'nguruwe', 'kuku', 'mahindi', 'samaki', 'chakula', 'hatua', 'mkubwa', 'mwisho', 'mjamzito', 'ananyonyesha', 'mwanzo', 'mzima', 'kula', 'gharama', 'bei', 'siku', 'siku', 'hivi', 'ndiyo', 'sawa', 'karibu', 'asante', 'hakuna', 'nipe', 'tuma', 'jibu'],
+    'ki': ['wî', 'mwega', 'nîndî', 'rîtheru', 'nguruwe', 'ngûkû', 'mûbî', 'mûchele', 'mûthenya', 'cokeria', 'kîhîî', 'mûnene', 'mûthî', 'mûkûrû', 'kûnyonithia', 'tûma', 'thagua', 'ûrî', 'na', 'rîo', 'kûranî', 'hûgûrû', 'gûtîrî'],
+    'mer': ['urova', 'ntathimana', 'theru', 'nguruwe', 'ngûkû', 'mûbî', 'mûchele', 'mûthenya', 'cokeria', 'kîhîî', 'mûnene', 'mûthî', 'mûkûrû', 'kûnyonithia', 'tûma', 'thagua', 'ûrî', 'na', 'rîo', 'kûranî', 'hûgûrû', 'gûtîrî'],
+}
+
+def detect_language(text: str) -> str:
+    text_lower = text.lower()
+    scores = {'en': 0, 'sw': 0, 'ki': 0, 'mer': 0}
+    for lang, keywords in LANG_DETECT_MAP.items():
+        for kw in keywords:
+            if kw in text_lower:
+                scores[lang] += 1
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else 'en'
+
+def gemini_parse_natural_language(text: str, current_lang: str = 'en'):
+    """Use Gemini to parse natural language like 'Nina nguruwe na mahindi'"""
+    if not gemini_client:
+        return None
+
+    prompt = f"""You are a Kenyan farming assistant parser. Extract structured data from the farmer's message.
+
+Message: "{text}"
+Current language hint: {current_lang}
+
+Available animals: pig (nguruwe, gruwe), chicken (kuku, nguku)
+Available pig stages: weaner, grower, finisher, gestating_sow, lactating_sow
+Available chicken stages: broiler_starter, broiler_grower, broiler_finisher, layer_starter, layer_grower, laying_hen
+Available feeds: maize, wheat_bran, rice_bran, sorghum, cassava_chips, sweet_potato_vines, soybean_meal, sunflower_cake, cottonseed_cake, fish_meal, blood_meal, brewers_grains, lucerne_hay, grass_hay, limestone, dicalcium_phosphate, oyster_shell, vitamin_mineral_premix, salt, methionine, lysine
+
+Instructions:
+- Detect language from message (Swahili words: nina, na, tafadhali, nguruwe, kuku, mahindi, samaki, hatua, mkubwa, mwisho, mjamzito, ananyonyesha, mwanzo, mzima)
+- Map common names: "mahindi" = maize, "nguruwe" = pig, "kuku" = chicken, "soya" = soybean_meal, "samaki" = fish_meal, "damu" = blood_meal, "chokaa" = limestone, "chumvi" = salt, "viazi" = sweet_potato_vines, "nyasi" = grass_hay, "bia" = brewers_grains
+- If the user mentions an animal and feeds but no stage, set ready=false and ask for stage
+- If the user mentions only one feed, set ready=false and ask for more feeds
+- If message is a greeting like "hi", "hello", "habari", intent=greeting
+- If message is clearly a menu number (1, 2, 3, etc.), confidence should be LOW (<0.5)
+
+Respond ONLY with valid JSON in this exact format:
+{{
+  "confidence": 0.0-1.0,
+  "lang": "en|sw|ki|mer|null",
+  "species": "pig|chicken|null",
+  "stage": "weaner|grower|finisher|gestating_sow|lactating_sow|broiler_starter|broiler_grower|broiler_finisher|layer_starter|layer_grower|laying_hen|null",
+  "feeds": ["feed_name_1", "feed_name_2"],
+  "intent": "calculate_ration|greeting|help|unknown",
+  "ready": false,
+  "response": "A short friendly reply in the detected language. Ask for missing info if needed. Max 400 chars."
+}}"""
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        raw = response.text.strip()
+        # Clean markdown
+        if raw.startswith("```json"): raw = raw[7:]
+        if raw.startswith("```"): raw = raw[3:]
+        if raw.endswith("```"): raw = raw[:-3]
+        raw = raw.strip()
+        data = json.loads(raw)
+        return data
+    except Exception as e:
+        print(f"[GEMINI] Parse error: {e}")
+        return None
+
+def apply_gemini_result(phone: str, data: dict, session: dict):
+    """Apply Gemini parsed data to user session. Returns (ready_for_calculation, message_to_send)"""
+    # Update language
+    if data.get('lang') in ['en', 'sw', 'ki', 'mer']:
+        session['lang'] = data['lang']
+
+    # Update species
+    species = data.get('species')
+    if species in ['pig', 'chicken']:
+        session['species'] = species
+
+    # Update stage/profile
+    stage = data.get('stage')
+    if stage and stage in STAGE_MAP:
+        session['profile'] = STAGE_MAP[stage]
+
+    # Update feeds
+    feeds = data.get('feeds', [])
+    feed_nums = []
+    for f in feeds:
+        f_lower = f.lower().strip().replace(' ', '_')
+        if f_lower in FEED_NAME_TO_NUMBER:
+            feed_nums.append(FEED_NAME_TO_NUMBER[f_lower])
+        else:
+            # Try partial match
+            for key, num in FEED_NAME_TO_NUMBER.items():
+                if key in f_lower or f_lower in key:
+                    feed_nums.append(num)
+                    break
+    if feed_nums:
+        session['feeds'] = list(set(feed_nums))
+
+    # Check if ready
+    if data.get('ready') and session.get('profile') and session.get('feeds'):
+        return True, None
+
+    # Build response
+    response = data.get('response', '')
+
+    # If we have species but no profile, append stage question
+    if session.get('species') and not session.get('profile'):
+        session['step'] = 2
+        stage_key = 'ask_stage_pig' if session['species'] == 'pig' else 'ask_stage_chicken'
+        if not response:
+            response = get_msg(phone, stage_key)
+        else:
+            response += "\n\n" + get_msg(phone, stage_key)
+    # If we have profile but no feeds or insufficient feeds
+    elif session.get('profile') and (not session.get('feeds') or len(session.get('feeds', [])) < 2):
+        session['step'] = 3
+        if not response:
+            response = get_msg(phone, 'ask_more_feeds')
+        else:
+            response += "\n\n" + get_msg(phone, 'ask_more_feeds')
+    # If we have nothing, start from language
+    elif not session.get('species'):
+        session['step'] = 1
+        if not response:
+            response = get_msg(phone, 'choose_species')
+
+    return False, response
+
 # ============================================================
 # WEBHOOK
 # ============================================================
@@ -822,6 +1036,59 @@ async def whatsapp_webhook(
         session.pop('ai_detected_feeds', None)
         msg.body(get_msg(phone, 'choose_language'))
         return Response(content=str(resp), media_type="application/xml")
+
+    # ============================================================
+    # GEMINI NATURAL LANGUAGE UNDERSTANDING
+    # ============================================================
+    # Try Gemini first for free-form text that isn't a clear menu command
+    is_menu_command = (
+        text in LANG_MAP or
+        text in ['1', '2'] and session.get('step') == 1 or
+        text in ['1', '2', '3', '4', '5'] and session.get('step') == 2 and session.get('species') == 'pig' or
+        text in ['1', '2', '3', '4', '5', '6'] and session.get('step') == 2 and session.get('species') == 'chicken' or
+        text in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii'] and session.get('ai_detected_feeds')
+    )
+
+    if gemini_client and not is_menu_command and len(text) > 2:
+        gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
+        if gemini_data and gemini_data.get('confidence', 0) >= 0.6:
+            intent = gemini_data.get('intent', 'unknown')
+
+            if intent == 'greeting':
+                session['step'] = -1
+                msg.body(get_msg(phone, 'choose_language'))
+                return Response(content=str(resp), media_type="application/xml")
+
+            ready, response = apply_gemini_result(phone, gemini_data, session)
+
+            if ready and session.get('profile') and session.get('feeds'):
+                # Validate before calculating
+                feed_ids = [FEED_NUMBER_MAP[n] for n in session['feeds'] if n in FEED_NUMBER_MAP]
+                available = {fid: FEEDS_DB[fid] for fid in feed_ids if fid in FEEDS_DB}
+                energy_count = sum(1 for f in available.values() if f['category'] == 'energy')
+                if energy_count == 0:
+                    msg.body(get_msg(phone, 'no_energy_error'))
+                    session['step'] = 0
+                    return Response(content=str(resp), media_type="application/xml")
+                total_min = sum(FEEDS_DB[fid]['min_incl'] for fid in feed_ids if fid in FEEDS_DB)
+                if total_min > 100:
+                    offenders = [FEEDS_DB[fid]['name'] + f" (min {FEEDS_DB[fid]['min_incl']}%)"
+                                 for fid in feed_ids if fid in FEEDS_DB and FEEDS_DB[fid]['min_incl'] > 0]
+                    msg.body(get_msg(phone, 'impossible_mins', total_min=total_min, offenders=', '.join(offenders)))
+                    session['step'] = 0
+                    return Response(content=str(resp), media_type="application/xml")
+
+                msg.body(get_msg(phone, 'calculating'))
+                session['step'] = 0
+                background_tasks.add_task(
+                    process_ration_and_reply, phone, session.get('profile'), 
+                    feed_ids, session.get('lang', 'en'), session.get('species', 'pig')
+                )
+                return Response(content=str(resp), media_type="application/xml")
+
+            if response:
+                msg.body(response)
+                return Response(content=str(resp), media_type="application/xml")
 
     # LANGUAGE SELECTION (Step -1)
     if session['step'] == -1:
@@ -910,15 +1177,19 @@ async def whatsapp_webhook(
 
     msg.body(get_msg(phone, 'generic_help'))
     return Response(content=str(resp), media_type="application/xml")
+
 # ============================================================
 # HEALTH CHECK
 # ============================================================
 @app.get("/")
 def health_check():
     return {
-        "status": "BalancedBora Gruwe-Kuku v1.0 is running 🐷🐔",
-        "features": ["pig_profiles", "chicken_profiles", "nrc_lp", "best_effort_mode", "ai_suggestions", "image_recognition", "21_feeds", "native_translations", "background_tasks", "lru_cache", "supplier_matching"],
+        "status": "BalancedBora Gruwe-Kuku v2.0 is running 🐷🐔",
+        "features": ["pig_profiles", "chicken_profiles", "nrc_lp", "best_effort_mode", "ai_suggestions", 
+                     "image_recognition", "21_feeds", "native_translations", "background_tasks", "lru_cache", 
+                     "supplier_matching", "gemini_nlp"],
         "vision_configured": bool(GOOGLE_API_KEY),
+        "gemini_configured": bool(GEMINI_API_KEY),
         "sessions": len(user_sessions),
         "cache_info": str(cached_solve_ration.cache_info())
     }
