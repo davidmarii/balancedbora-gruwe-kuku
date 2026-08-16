@@ -1,6 +1,7 @@
 # ============================================================
-# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.1
-# Fixes: Session memory, recommendation engine, no looping,
+# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.2
+# Fixes: Model 404 (gemini-2.5-flash deprecated), session memory,
+#        recommendation engine, no looping, local text parsing,
 #        smart natural language flow, accurate least-cost LP
 # ============================================================
 
@@ -34,6 +35,9 @@ TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "whatsapp:+254703709346")
 GOOGLE_API_KEY = os.getenv("GOOGLE_VISION_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# FIXED: gemini-2.5-flash is no longer available to new users (shut down Feb 2026).
+# Use gemini-3.5-flash (GA, May 2026) or configure via env var.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
 client = Client(TWILIO_SID, TWILIO_TOKEN) if TWILIO_SID else None
 
@@ -44,7 +48,7 @@ gemini_client = None
 if GEMINI_API_KEY:
     try:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        print("[GEMINI] Client initialized successfully")
+        print(f"[GEMINI] Client initialized. Using model: {GEMINI_MODEL}")
     except Exception as e:
         print(f"[GEMINI] Init failed: {e}")
 
@@ -112,6 +116,7 @@ MESSAGES = {
         'ask_confirm_recs': "Reply YES to calculate with these feeds + my recommendations, or send MORE feed numbers to add.",
         'ask_more_feeds': "You need at least 2 feeds (1 energy + 1 protein). Please send more feed numbers.",
         'memory_greeting': "👋 Welcome back! Last time you calculated a ration for {profile} using {feeds}.\n\nSend START for a new ration, or tell me what's changed.",
+        'gemini_error': "⚠️ AI helper is temporarily unavailable. Please use the menu numbers (e.g., 1,3,6) to select your feeds.",
     },
     'sw': {
         'welcome': "🐷🐔 Karibu BalancedBora Gruwe-Kuku!\n\nNakuhesabu chakula bora kwa gharama nafuu kwa nguruwe au kuku wako.",
@@ -166,6 +171,7 @@ MESSAGES = {
         'ask_confirm_recs': "Jibu NDIYO kuhesabu na chakula hiki + mapendekezo yangu, au tuma namba ZAIDI za chakula cha kuongeza.",
         'ask_more_feeds': "Unahitaji chakula angalau 2 (1 nishati + 1 proteini). Tafadhali tuma namba zaidi za chakula.",
         'memory_greeting': "👋 Karibu tena! Mara ya mwisho ulihesabu chakula kwa {profile} ukitumia {feeds}.\n\nTuma START kwa chakula kipya, au niambie kilichobadilika.",
+        'gemini_error': "⚠️ Msaidizi wa AI haupo kwa sasa. Tafadhali tumia namba za menyu (k.m. 1,3,6) kuchagua chakula.",
     },
     'ki': {
         'welcome': "🐷🐔 Wî mwega BalancedBora Gruwe-Kuku!\n\nNîndîrathîrîria irio rîtheru ya nguruwe kana ngûkû.",
@@ -220,6 +226,7 @@ MESSAGES = {
         'ask_confirm_recs': "Cokeria II kûhûthia na irio icio + maendekezo makwa, kana tûma namba ingî cia irio.",
         'ask_more_feeds': "Wîna bata irio 2 (1 hoti + 1 proteini). Tafadhali tûma namba ingî cia irio.",
         'memory_greeting': "👋 Wî mwega! Mûthenya wa gûkû ûrathîrîririe irio rîtheru kwa {profile} ukitumia {feeds}.\n\nTuma START kûgîa rîngî, kana ûgîe ûrî na gûtûmîra.",
+        'gemini_error': "⚠️ Mûtûngîri wa AI ndarî hûgûrû. Tafadhali tumia namba cia menyu (k.m. 1,3,6) kûthagua irio.",
     },
     'mer': {
         'welcome': "🐷🐔 Urova BalancedBora Gruwe-Kuku!\n\nNtathimana irio theru ya nguruwe kana ngûkû.",
@@ -274,6 +281,7 @@ MESSAGES = {
         'ask_confirm_recs': "Cokeria II kûhûthia na irio icio + maendekezo makwa, kana tûma namba ingî cia irio.",
         'ask_more_feeds': "Wîna bata irio 2 (1 hoti + 1 proteini). Tafadhali tûma namba ingî cia irio.",
         'memory_greeting': "👋 Wî mwega! Mûthenya wa gûkû ûrathîrîririe irio rîtheru kwa {profile} ukitumia {feeds}.\n\nTuma START kûgîa rîngî, kana ûgîe ûrî na gûtûmîra.",
+        'gemini_error': "⚠️ Mûtûngîri wa AI ndarî hûgûrû. Tafadhali tumia namba cia menyu (k.m. 1,3,6) kûthagua irio.",
     }
 }
 
@@ -286,6 +294,7 @@ def get_msg(phone, key, **kwargs):
         except:
             pass
     return text
+
 
 # ============================================================
 # NUMBER -> FEED ID MAPPING (21 feeds)
@@ -506,6 +515,7 @@ CHICKEN_PROFILES = {
 
 ALL_PROFILES = {**PIG_PROFILES, **CHICKEN_PROFILES}
 
+
 # ============================================================
 # SUPPLIER DATABASE
 # ============================================================
@@ -534,64 +544,50 @@ def find_suppliers_for_feeds(feed_ids):
 # RECOMMENDATION ENGINE — tells farmer what's missing
 # ============================================================
 def analyze_feed_gaps(profile_key, selected_feed_ids):
-    """Analyze selected feeds and return recommendations for what's missing."""
+    """Analyze selected feeds and return recommendation keys for what's missing."""
     if profile_key not in ALL_PROFILES:
         return []
-
     profile = ALL_PROFILES[profile_key]
     available = {fid: FEEDS_DB[fid] for fid in selected_feed_ids if fid in FEEDS_DB}
-
     if len(available) < 1:
         return ['rec_energy', 'rec_protein', 'rec_mineral', 'rec_salt', 'rec_premix']
-
     recs = []
     categories = {f['category'] for f in available.values()}
-
     # Check energy
     if 'energy' not in categories and 'forage' not in categories:
         recs.append('rec_energy')
-
     # Check protein
     if 'protein' not in categories:
         recs.append('rec_protein')
-
     # Check minerals
     has_ca = any(f['ca'] > 1.0 for f in available.values())
     has_p = any(f['p'] > 0.5 for f in available.values())
     has_mineral = 'mineral' in categories
-
     if not has_ca and not has_mineral:
         recs.append('rec_mineral')
-
     # Check salt
     has_salt = 'salt' in available
     if not has_salt and not has_mineral:
         recs.append('rec_salt')
-
     # Check premix
     has_premix = 'vitamin_mineral_premix' in available
     if not has_premix:
         recs.append('rec_premix')
-
-    # Species-specific recommendations
+    # Species-specific
     species = 'pig' if profile_key.startswith('p') else 'chicken'
-
     if species == 'pig' and profile_key in ['p1', 'p2']:
         has_lysine = 'lysine' in available
         if not has_lysine:
             recs.append('rec_lysine_pig')
-
     if species == 'chicken' and profile_key in ['c1', 'c2']:
         has_methionine = 'methionine' in available
         if not has_methionine:
             recs.append('rec_methionine_broiler')
-
     if profile_key == 'c6':  # Laying hen
         has_shell = 'oyster_shell' in available
         has_lime = 'limestone' in available
         if not has_shell and not has_lime:
             recs.append('rec_calcium_layer')
-
     return recs
 
 
@@ -599,17 +595,13 @@ def format_recommendations(phone, profile_key, selected_feed_ids):
     """Format recommendations message for the farmer."""
     m = lambda k, **kw: get_msg(phone, k, **kw)
     rec_keys = analyze_feed_gaps(profile_key, selected_feed_ids)
-
     if not rec_keys:
         return ""
-
     feed_names = [FEEDS_DB[fid]['name'] for fid in selected_feed_ids if fid in FEEDS_DB]
     msg = f"*{m('recommendations_header')}*\n"
     msg += m('current_selection', feeds=', '.join(feed_names)) + "\n\n"
-
     for key in rec_keys:
         msg += m(key) + "\n"
-
     msg += f"\n{m('ask_confirm_recs')}"
     return msg
 
@@ -671,6 +663,7 @@ class FeedSuggestionEngine:
         return candidates[:3]
 
 suggestion_engine = FeedSuggestionEngine(FEEDS_DB, ALL_PROFILES)
+
 
 # ============================================================
 # MAIN SOLVER — STRICT + BEST-EFFORT
@@ -799,9 +792,11 @@ def solve_ration(profile_key, selected_feeds):
     }
     return result, None
 
+
 @lru_cache(maxsize=256)
 def cached_solve_ration(profile_key: str, selected_feeds_tuple: tuple):
     return solve_ration(profile_key, list(selected_feeds_tuple))
+
 
 # ============================================================
 # IMAGE RECOGNITION (Google Vision)
@@ -923,6 +918,7 @@ def process_ration_and_reply(phone: str, profile_key: str, feed_ids: list, lang:
     else:
         print(f"[BG TASK] No Twilio client, cannot send to {phone}")
 
+
 # ============================================================
 # GEMINI NATURAL LANGUAGE UNDERSTANDING
 # ============================================================
@@ -983,8 +979,9 @@ def detect_language(text: str) -> str:
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else 'en'
 
+
 def gemini_parse_natural_language(text: str, current_lang: str = 'en'):
-    """Use Gemini to parse natural language."""
+    """Use Gemini to parse natural language. Returns dict or None."""
     if not gemini_client:
         return None
 
@@ -1021,7 +1018,7 @@ Respond ONLY with valid JSON:
 
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,  # FIXED: was hardcoded "gemini-2.5-flash" (deprecated)
             contents=prompt
         )
         raw = response.text.strip()
@@ -1034,6 +1031,7 @@ Respond ONLY with valid JSON:
     except Exception as e:
         print(f"[GEMINI] Parse error: {e}")
         return None
+
 
 # ============================================================
 # WEBHOOK — FIXED: No looping, smart recommendations, memory
@@ -1098,7 +1096,7 @@ async def whatsapp_webhook(
     # ============================================================
     # HANDLE START / RESET
     # ============================================================
-    if text_lower in ['start', 'hi', 'hello', 'help', '0', 'mwanzo', 'anza', 'anza upya']:
+    if text_lower in ['start', 'mwanzo', 'anza', 'anza upya']:
         # Save history before reset
         if session.get('profile') and session.get('feeds'):
             session['history'].append({
@@ -1106,7 +1104,6 @@ async def whatsapp_webhook(
                 'feeds': session['feeds'].copy(),
                 'lang': session.get('lang', 'en')
             })
-            # Keep only last 3
             session['history'] = session['history'][-3:]
 
         session['step'] = -1
@@ -1116,7 +1113,6 @@ async def whatsapp_webhook(
         session['recommended_feeds'] = []
         session['ai_detected_feeds'] = None
 
-        # If they have history, greet them with memory
         if session['history']:
             last = session['history'][-1]
             profile_name = ALL_PROFILES.get(last['profile'], {}).get('name', last['profile'])
@@ -1126,6 +1122,13 @@ async def whatsapp_webhook(
             msg.body(get_msg(phone, 'memory_greeting', profile=profile_name, feeds=', '.join(feed_names[:3])))
         else:
             msg.body(get_msg(phone, 'choose_language'))
+        return Response(content=str(resp), media_type="application/xml")
+
+    # ============================================================
+    # GREETINGS (don't reset session — just help)
+    # ============================================================
+    if text_lower in ['hi', 'hello', 'help', '0', 'habari']:
+        msg.body(get_msg(phone, 'generic_help'))
         return Response(content=str(resp), media_type="application/xml")
 
     # ============================================================
@@ -1155,6 +1158,7 @@ async def whatsapp_webhook(
         else:
             msg.body(get_msg(phone, 'invalid_choice') + "\n\n" + get_msg(phone, 'choose_species'))
         return Response(content=str(resp), media_type="application/xml")
+
 
     # ============================================================
     # PROFILE/STAGE SELECTION (Step 2)
@@ -1209,6 +1213,7 @@ async def whatsapp_webhook(
             )
         return Response(content=str(resp), media_type="application/xml")
 
+
     # ============================================================
     # STEP 3 or 4: FEED SELECTION
     # ============================================================
@@ -1242,16 +1247,30 @@ async def whatsapp_webhook(
             )
             return Response(content=str(resp), media_type="application/xml")
 
-        # Try to parse feeds from text
+        # Try to parse feeds from text — LOCAL FIRST, then Gemini
         selected_nums = []
 
-        # First try comma-separated numbers
+        # 1) Try comma-separated numbers (e.g. "1,3,6")
         parts = [s.strip() for s in text.split(",")]
         for p in parts:
             if p in FEED_NUMBER_MAP:
                 selected_nums.append(p)
 
-        # If no numbers found, try Gemini to extract feed names
+        # 2) If no numbers found, try natural language names locally
+        if not selected_nums:
+            text_clean = text_lower.replace(' ', '_').replace(',', ' ')
+            words = text_clean.split()
+            for word in words:
+                if word in FEED_NAME_TO_NUMBER:
+                    selected_nums.append(FEED_NAME_TO_NUMBER[word])
+                else:
+                    # fuzzy match
+                    for key, num in FEED_NAME_TO_NUMBER.items():
+                        if key in word or word in key:
+                            selected_nums.append(num)
+                            break
+
+        # 3) Only if still nothing, try Gemini
         if not selected_nums and gemini_client and len(text) > 2:
             gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
             if gemini_data and gemini_data.get('confidence', 0) >= 0.5:
@@ -1275,7 +1294,7 @@ async def whatsapp_webhook(
             msg.body(get_msg(phone, 'select_at_least_2') + "\n\n" + get_msg(phone, feed_key))
             return Response(content=str(resp), media_type="application/xml")
 
-        # Merge with existing feeds
+        # Merge with existing feeds (PRESERVE — don't overwrite)
         existing = session.get('feeds', [])
         all_feeds = list(set(existing + feed_ids))
         session['feeds'] = all_feeds
@@ -1292,7 +1311,7 @@ async def whatsapp_webhook(
             msg.body(get_msg(phone, 'no_energy_error'))
             return Response(content=str(resp), media_type="application/xml")
 
-        # Get recommendations
+        # Get recommendations for gaps
         rec_keys = analyze_feed_gaps(session['profile'], all_feeds)
 
         if rec_keys:
@@ -1341,8 +1360,10 @@ async def whatsapp_webhook(
 
         return Response(content=str(resp), media_type="application/xml")
 
+
     # ============================================================
     # FALLBACK: Try Gemini for any unrecognized message
+    # CRITICAL FIX: Never overwrite existing species/stage/profile with nulls
     # ============================================================
     if gemini_client and len(text) > 2:
         gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
@@ -1350,24 +1371,26 @@ async def whatsapp_webhook(
             intent = gemini_data.get('intent', 'unknown')
 
             if intent == 'greeting':
-                session['step'] = -1
-                msg.body(get_msg(phone, 'choose_language'))
+                msg.body(get_msg(phone, 'generic_help'))
                 return Response(content=str(resp), media_type="application/xml")
 
-            # Update session PRESERVING existing values
+            # Update language if provided and valid
             if gemini_data.get('lang') in ['en', 'sw', 'ki', 'mer']:
                 session['lang'] = gemini_data['lang']
 
+            # FIXED: Only set species if we don't already have one AND Gemini returned one
             species = gemini_data.get('species')
             if species in ['pig', 'chicken'] and not session.get('species'):
                 session['species'] = species
                 session['step'] = 2
 
+            # FIXED: Only set stage/profile if we don't already have one AND Gemini returned one
             stage = gemini_data.get('stage')
             if stage and stage in STAGE_MAP and not session.get('profile'):
                 session['profile'] = STAGE_MAP[stage]
                 session['step'] = 3
 
+            # Parse feeds from Gemini (merge, don't overwrite)
             feeds = gemini_data.get('feeds', [])
             feed_nums = []
             for f in feeds:
@@ -1382,7 +1405,8 @@ async def whatsapp_webhook(
 
             if feed_nums:
                 existing = session.get('feeds', [])
-                all_feeds = list(set(existing + [FEED_NUMBER_MAP[n] for n in feed_nums if n in FEED_NUMBER_MAP]))
+                new_feeds = [FEED_NUMBER_MAP[n] for n in feed_nums if n in FEED_NUMBER_MAP]
+                all_feeds = list(set(existing + new_feeds))
                 session['feeds'] = all_feeds
 
             # Determine next step based on what's missing
@@ -1428,10 +1452,15 @@ async def whatsapp_webhook(
                         session['feeds'], session.get('lang', 'en'), session.get('species', 'pig')
                     )
                 return Response(content=str(resp), media_type="application/xml")
+        else:
+            # Gemini returned low confidence or failed
+            msg.body(get_msg(phone, 'gemini_error'))
+            return Response(content=str(resp), media_type="application/xml")
 
     # Default help
     msg.body(get_msg(phone, 'generic_help'))
     return Response(content=str(resp), media_type="application/xml")
+
 
 # ============================================================
 # HEALTH CHECK
@@ -1439,12 +1468,14 @@ async def whatsapp_webhook(
 @app.get("/")
 def health_check():
     return {
-        "status": "BalancedBora Gruwe-Kuku v2.1 is running 🐷🐔",
+        "status": "BalancedBora Gruwe-Kuku v2.2 is running 🐷🐔",
         "features": ["pig_profiles", "chicken_profiles", "nrc_lp", "best_effort_mode", "ai_suggestions", 
                      "image_recognition", "21_feeds", "native_translations", "background_tasks", "lru_cache", 
-                     "supplier_matching", "gemini_nlp", "recommendation_engine", "session_memory"],
+                     "supplier_matching", "gemini_nlp", "recommendation_engine", "session_memory",
+                     "local_text_parsing", "no_looping"],
         "vision_configured": bool(GOOGLE_API_KEY),
         "gemini_configured": bool(GEMINI_API_KEY),
+        "gemini_model": GEMINI_MODEL,
         "sessions": len(user_sessions),
         "cache_info": str(cached_solve_ration.cache_info())
     }
