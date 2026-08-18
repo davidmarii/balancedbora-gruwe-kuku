@@ -285,7 +285,7 @@ MESSAGES = {
     }
 }
 
-def get_msg(phone, key, **kwargs):
+def get_msg(phone, key, /, **kwargs):
     lang = user_sessions.get(phone, {}).get('lang', 'en')
     text = MESSAGES.get(lang, MESSAGES['en']).get(key, MESSAGES['en'][key])
     if kwargs:
