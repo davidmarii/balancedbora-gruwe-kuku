@@ -1046,17 +1046,24 @@ async def whatsapp_webhook(
     MediaUrl0: str = Form(default=""),
     MediaContentType0: str = Form(default="")
 ):
+    """WhatsApp webhook with flexible natural-language formulation flow.
+
+    A user can now provide animal, stage and ingredients in one message.
+    The bot calculates immediately once it has a profile and >=2 feeds.
+    The old recommendation -> YES -> calculate loop has been removed.
+    """
     phone = From.replace("whatsapp:", "")
     text = Body.strip()
     text_lower = text.lower()
-    num_media = int(NumMedia)
+    try:
+        num_media = int(NumMedia or 0)
+    except (TypeError, ValueError):
+        num_media = 0
 
-    # Initialize session with defaults
     if phone not in user_sessions:
         user_sessions[phone] = {'step': -1, 'lang': 'en', 'history': []}
     session = user_sessions[phone]
 
-    # Ensure all keys exist
     session.setdefault('step', -1)
     session.setdefault('lang', 'en')
     session.setdefault('species', None)
@@ -1069,35 +1076,192 @@ async def whatsapp_webhook(
     resp = MessagingResponse()
     msg = resp.message()
 
+    def xml_response():
+        return Response(content=str(resp), media_type="application/xml")
+
+    def parse_feed_numbers_local(raw_text: str):
+        """Extract feed menu numbers and natural-language feed names locally."""
+        numbers = []
+        # Accept: 1,3,6 | 1 3 6 | feeds 1, 3, 6
+        for token in raw_text.replace(';', ',').split(','):
+            token = token.strip()
+            if token in FEED_NUMBER_MAP:
+                numbers.append(token)
+        if not numbers:
+            tokens = raw_text.lower().replace(',', ' ').replace(';', ' ').split()
+            for token in tokens:
+                cleaned = token.strip(".()[]{}:;!?\"")
+                if cleaned in FEED_NUMBER_MAP:
+                    numbers.append(cleaned)
+                    continue
+                if cleaned in FEED_NAME_TO_NUMBER:
+                    numbers.append(FEED_NAME_TO_NUMBER[cleaned])
+                    continue
+                for key, num in FEED_NAME_TO_NUMBER.items():
+                    if key in cleaned or cleaned in key:
+                        numbers.append(num)
+                        break
+        return list(dict.fromkeys(numbers))
+
+    def parse_feed_ids(raw_text: str):
+        nums = parse_feed_numbers_local(raw_text)
+
+        # Gemini only supplements local parsing when necessary.
+        if not nums and gemini_client and len(raw_text) > 2:
+            data = gemini_parse_natural_language(raw_text, session.get('lang', 'en'))
+            if data and data.get('confidence', 0) >= 0.5:
+                for feed in data.get('feeds', []) or []:
+                    f = str(feed).lower().strip().replace(' ', '_')
+                    if f in FEED_NAME_TO_NUMBER:
+                        nums.append(FEED_NAME_TO_NUMBER[f])
+                    else:
+                        for key, num in FEED_NAME_TO_NUMBER.items():
+                            if key in f or f in key:
+                                nums.append(num)
+                                break
+        return list(dict.fromkeys(FEED_NUMBER_MAP[n] for n in nums if n in FEED_NUMBER_MAP))
+
+    def detect_stage_local(raw_text: str):
+        """Detect common animal-stage phrases without requiring Gemini."""
+        normalized = raw_text.lower().strip().replace('-', '_')
+        normalized = normalized.replace('  ', ' ')
+        stage_aliases = {
+            'weaner': 'p1', 'pig weaner': 'p1', 'weaner pig': 'p1',
+            'grower pig': 'p2', 'pig grower': 'p2', 'finisher pig': 'p3', 'pig finisher': 'p3',
+            'gestating sow': 'p4', 'pregnant sow': 'p4', 'gestating': 'p4',
+            'lactating sow': 'p5', 'nursing sow': 'p5', 'lactating': 'p5',
+            'broiler starter': 'c1', 'broiler start': 'c1',
+            'broiler grower': 'c2', 'broiler finisher': 'c3', 'broiler finish': 'c3',
+            'layer starter': 'c4', 'layer start': 'c4',
+            'layer grower': 'c5', 'laying hen': 'c6', 'laying': 'c6'
+        }
+        # Longest phrases first so "broiler starter" wins over "starter"-like fragments.
+        for phrase, profile in sorted(stage_aliases.items(), key=lambda x: len(x[0]), reverse=True):
+            if phrase in normalized:
+                return profile
+        return None
+
+    def apply_parsed_data(data):
+        """Merge Gemini output into session without wiping existing information."""
+        if not data:
+            return
+
+        detected_lang = data.get('lang')
+        if detected_lang in ['en', 'sw', 'ki', 'mer']:
+            session['lang'] = detected_lang
+
+        species = data.get('species')
+        stage = data.get('stage')
+
+        if species in ['pig', 'chicken']:
+            session['species'] = species
+
+        if stage in STAGE_MAP:
+            session['profile'] = STAGE_MAP[stage]
+            # Keep species and profile consistent with the decoded profile.
+            session['species'] = 'pig' if session['profile'].startswith('p') else 'chicken'
+
+        parsed_feeds = []
+        for feed in data.get('feeds', []) or []:
+            f = str(feed).lower().strip().replace(' ', '_')
+            if f in FEED_NAME_TO_NUMBER:
+                parsed_feeds.append(FEED_NUMBER_MAP[FEED_NAME_TO_NUMBER[f]])
+            else:
+                for key, num in FEED_NAME_TO_NUMBER.items():
+                    if key in f or f in key:
+                        parsed_feeds.append(FEED_NUMBER_MAP[num])
+                        break
+        if parsed_feeds:
+            session['feeds'] = list(dict.fromkeys(session.get('feeds', []) + parsed_feeds))
+
+    def validate_and_start_calculation():
+        """Start LP calculation only when the session is actually ready."""
+        profile = session.get('profile')
+        species = session.get('species')
+        feed_ids = list(dict.fromkeys(session.get('feeds', [])))
+
+        if not species:
+            session['step'] = 1
+            msg.body(get_msg(phone, 'choose_species'))
+            return False
+
+        if not profile:
+            session['step'] = 2
+            msg.body(get_msg(phone, 'choose_pig' if species == 'pig' else 'choose_chicken'))
+            return False
+
+        if len(feed_ids) < 2:
+            session['step'] = 3
+            feed_key = 'feed_selection_pig' if species == 'pig' else 'feed_selection_chicken'
+            msg.body(get_msg(phone, 'ask_more_feeds') + "\n\n" + get_msg(phone, feed_key))
+            return False
+
+        available = {fid: FEEDS_DB[fid] for fid in feed_ids if fid in FEEDS_DB}
+        if not available:
+            session['step'] = 3
+            msg.body(get_msg(phone, 'select_at_least_2'))
+            return False
+
+        if not any(f['category'] == 'energy' for f in available.values()):
+            msg.body(get_msg(phone, 'no_energy_error'))
+            session['step'] = 3
+            return False
+
+        total_min = sum(FEEDS_DB[fid]['min_incl'] for fid in feed_ids if fid in FEEDS_DB)
+        if total_min > 100:
+            offenders = [
+                FEEDS_DB[fid]['name'] + f" (min {FEEDS_DB[fid]['min_incl']}%)"
+                for fid in feed_ids
+                if fid in FEEDS_DB and FEEDS_DB[fid]['min_incl'] > 0
+            ]
+            msg.body(get_msg(phone, 'impossible_mins', total_min=total_min, offenders=', '.join(offenders)))
+            session['step'] = 3
+            return False
+
+        # Immediate formulation: no recommendation confirmation gate.
+        session['feeds'] = feed_ids
+        session['step'] = 0
+        msg.body(get_msg(phone, 'calculating'))
+        background_tasks.add_task(
+            process_ration_and_reply,
+            phone,
+            profile,
+            feed_ids,
+            session.get('lang', 'en'),
+            species
+        )
+        return True
+
     # ============================================================
-    # HANDLE IMAGE
+    # IMAGE
     # ============================================================
     if num_media > 0 and 'image' in MediaContentType0:
         detected, error = detect_feeds_from_image(MediaUrl0)
         if error:
-            msg.body(error + "\n\n" + get_msg(phone, 'choose_language'))
-            session['step'] = -1
-            return Response(content=str(resp), media_type="application/xml")
+            msg.body(error + "\n\n" + get_msg(phone, 'generic_help'))
+            return xml_response()
         if not detected:
             msg.body(get_msg(phone, 'photo_not_found') + "\n\n" + get_msg(phone, 'generic_help'))
-            return Response(content=str(resp), media_type="application/xml")
+            return xml_response()
         session['ai_detected_feeds'] = detected
-        feed_names = [FEEDS_DB[FEED_NUMBER_MAP[n]]['name'] for n in detected if n in FEED_NUMBER_MAP]
+        feed_names = [
+            FEEDS_DB[FEED_NUMBER_MAP[n]]['name']
+            for n in detected if n in FEED_NUMBER_MAP
+        ]
         msg.body(get_msg(phone, 'photo_detected', feeds=', '.join(feed_names)))
-        return Response(content=str(resp), media_type="application/xml")
+        return xml_response()
 
     # ============================================================
-    # HANDLE VOICE
+    # VOICE
     # ============================================================
     if num_media > 0 and 'audio' in MediaContentType0:
         msg.body(get_msg(phone, 'voice_soon') + "\n\n" + get_msg(phone, 'generic_help'))
-        return Response(content=str(resp), media_type="application/xml")
+        return xml_response()
 
     # ============================================================
-    # HANDLE START / RESET
+    # START / RESET
     # ============================================================
     if text_lower in ['start', 'mwanzo', 'anza', 'anza upya']:
-        # Save history before reset
         if session.get('profile') and session.get('feeds'):
             session['history'].append({
                 'profile': session['profile'],
@@ -1106,46 +1270,87 @@ async def whatsapp_webhook(
             })
             session['history'] = session['history'][-3:]
 
-        session['step'] = -1
+        session['step'] = 1
         session['species'] = None
         session['profile'] = None
         session['feeds'] = []
         session['recommended_feeds'] = []
         session['ai_detected_feeds'] = None
 
-        if session['history']:
-            last = session['history'][-1]
-            profile_name = ALL_PROFILES.get(last['profile'], {}).get('name', last['profile'])
-            feed_names = [FEEDS_DB[FEED_NUMBER_MAP.get(f, f)]['name'] for f in last['feeds'] if f in FEEDS_DB or f in FEED_NUMBER_MAP.values()]
-            if not feed_names:
-                feed_names = last['feeds']
-            msg.body(get_msg(phone, 'memory_greeting', profile=profile_name, feeds=', '.join(feed_names[:3])))
-        else:
-            msg.body(get_msg(phone, 'choose_language'))
-        return Response(content=str(resp), media_type="application/xml")
+        # Do not force language selection on every START. Preserve selected language.
+        msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
+        return xml_response()
 
     # ============================================================
-    # GREETINGS (don't reset session — just help)
+    # PHOTO CONFIRMATION
+    # ============================================================
+    if session.get('ai_detected_feeds') and text_lower in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii', 'ndiyo']:
+        detected_numbers = session.get('ai_detected_feeds') or []
+        detected_ids = [FEED_NUMBER_MAP[n] for n in detected_numbers if n in FEED_NUMBER_MAP]
+        session['ai_detected_feeds'] = None
+        session['feeds'] = list(dict.fromkeys(session.get('feeds', []) + detected_ids))
+        # Calculate immediately when animal/stage are already known; otherwise ask only for what's missing.
+        if validate_and_start_calculation():
+            return xml_response()
+        return xml_response()
+
+    # ============================================================
+    # FIRST: UNDERSTAND COMPLETE NATURAL-LANGUAGE MESSAGES
+    # This runs before the menu state, so users can skip the rigid flow.
+    # ============================================================
+    if len(text) > 1 and text_lower not in ['hi', 'hello', 'help', 'habari']:
+        # Local feed parsing works without AI.
+        local_feed_ids = parse_feed_ids(text)
+        if local_feed_ids:
+            session['feeds'] = list(dict.fromkeys(session.get('feeds', []) + local_feed_ids))
+
+        # Gemini can extract animal + stage + feeds from a single sentence.
+        if gemini_client and len(text) > 2:
+            gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
+            if gemini_data and gemini_data.get('confidence', 0) >= 0.5:
+                apply_parsed_data(gemini_data)
+
+        # Local stage detection makes the bot usable even when Gemini is unavailable.
+        if not session.get('profile'):
+            local_profile = detect_stage_local(text)
+            if local_profile:
+                session['profile'] = local_profile
+                session['species'] = 'pig' if local_profile.startswith('p') else 'chicken'
+
+        # Direct species keywords without Gemini.
+        if not session.get('species'):
+            if text_lower in ['pig', 'nguruwe', 'gruwe', 'hog', 'swine']:
+                session['species'] = 'pig'
+            elif text_lower in ['chicken', 'kuku', 'nguku', 'hen', 'broiler', 'layer']:
+                session['species'] = 'chicken'
+
+        # If all required inputs are now present, formulate immediately.
+        if session.get('species') and session.get('profile') and len(session.get('feeds', [])) >= 2:
+            validate_and_start_calculation()
+            return xml_response()
+
+    # ============================================================
+    # SIMPLE MENU FLOW (kept as an easy fallback)
     # ============================================================
     if text_lower in ['hi', 'hello', 'help', '0', 'habari']:
-        msg.body(get_msg(phone, 'generic_help'))
-        return Response(content=str(resp), media_type="application/xml")
+        if not session.get('species'):
+            msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
+        else:
+            msg.body(get_msg(phone, 'generic_help'))
+        return xml_response()
 
-    # ============================================================
-    # LANGUAGE SELECTION (Step -1)
-    # ============================================================
+    # Language selection is retained for users who prefer the menu.
     if session['step'] == -1:
         if text_lower in LANG_MAP:
             session['lang'] = LANG_MAP[text_lower]
             session['step'] = 1
             msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
         else:
-            msg.body(get_msg(phone, 'choose_language'))
-        return Response(content=str(resp), media_type="application/xml")
+            session['step'] = 1
+            msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
+        return xml_response()
 
-    # ============================================================
-    # SPECIES SELECTION (Step 1)
-    # ============================================================
+    # Step 1: species
     if session['step'] == 1:
         if text_lower == '1' or text_lower in ['pig', 'nguruwe', 'gruwe']:
             session['species'] = 'pig'
@@ -1157,309 +1362,68 @@ async def whatsapp_webhook(
             msg.body(get_msg(phone, 'choose_chicken'))
         else:
             msg.body(get_msg(phone, 'invalid_choice') + "\n\n" + get_msg(phone, 'choose_species'))
-        return Response(content=str(resp), media_type="application/xml")
+        return xml_response()
 
-
-    # ============================================================
-    # PROFILE/STAGE SELECTION (Step 2)
-    # ============================================================
+    # Step 2: animal stage/profile
     if session['step'] == 2:
         species = session.get('species', 'pig')
-        valid_pigs = ['1','2','3','4','5']
-        valid_chickens = ['1','2','3','4','5','6']
-        valid = valid_pigs if species == 'pig' else valid_chickens
-
+        valid = ['1','2','3','4','5'] if species == 'pig' else ['1','2','3','4','5','6']
         if text_lower in valid:
             prefix = 'p' if species == 'pig' else 'c'
             session['profile'] = prefix + text_lower
             session['step'] = 3
             feed_key = 'feed_selection_pig' if species == 'pig' else 'feed_selection_chicken'
             msg.body(get_msg(phone, feed_key))
-        else:
-            # Try Gemini to parse stage from natural language
-            if gemini_client and len(text) > 2:
-                gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
-                if gemini_data and gemini_data.get('confidence', 0) >= 0.6:
-                    stage = gemini_data.get('stage')
-                    if stage and stage in STAGE_MAP:
-                        session['profile'] = STAGE_MAP[stage]
-                        session['step'] = 3
-                        feed_key = 'feed_selection_pig' if species == 'pig' else 'feed_selection_chicken'
-                        msg.body(get_msg(phone, feed_key))
-                        return Response(content=str(resp), media_type="application/xml")
+            return xml_response()
 
-            back_key = 'choose_pig' if species == 'pig' else 'choose_chicken'
-            msg.body(get_msg(phone, 'invalid_choice') + "\n\n" + get_msg(phone, back_key))
-        return Response(content=str(resp), media_type="application/xml")
+        if gemini_client and len(text) > 2:
+            data = gemini_parse_natural_language(text, session.get('lang', 'en'))
+            if data and data.get('confidence', 0) >= 0.5:
+                apply_parsed_data(data)
+                if session.get('profile') and len(session.get('feeds', [])) >= 2:
+                    validate_and_start_calculation()
+                    return xml_response()
+                if session.get('profile'):
+                    session['step'] = 3
+                    feed_key = 'feed_selection_pig' if species == 'pig' else 'feed_selection_chicken'
+                    msg.body(get_msg(phone, feed_key))
+                    return xml_response()
 
-    # ============================================================
-    # CONFIRM AI-DETECTED FEEDS (from photo)
-    # ============================================================
-    if session.get('ai_detected_feeds') and text_lower in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii', 'ndiyo']:
-        feed_ids = [FEED_NUMBER_MAP[n] for n in session['ai_detected_feeds'] if n in FEED_NUMBER_MAP]
-        session['ai_detected_feeds'] = None
-        session['feeds'] = list(set(feed_ids))
-        session['step'] = 4
-        rec_msg = format_recommendations(phone, session['profile'], session['feeds'])
-        if rec_msg:
-            msg.body(rec_msg)
-        else:
-            # No recommendations needed, go straight to calculation
-            msg.body(get_msg(phone, 'calculating'))
-            session['step'] = 0
-            background_tasks.add_task(
-                process_ration_and_reply, phone, session['profile'], 
-                session['feeds'], session.get('lang', 'en'), session.get('species', 'pig')
-            )
-        return Response(content=str(resp), media_type="application/xml")
+        msg.body(get_msg(phone, 'invalid_choice') + "\n\n" + get_msg(phone, 'choose_pig' if species == 'pig' else 'choose_chicken'))
+        return xml_response()
 
+    # Step 3: feed entry. Any valid feed list is now calculated immediately.
+    if session['step'] in [3, 4, 0]:
+        feed_ids = parse_feed_ids(text)
+        if feed_ids:
+            session['feeds'] = list(dict.fromkeys(session.get('feeds', []) + feed_ids))
+            if validate_and_start_calculation():
+                return xml_response()
+            return xml_response()
+
+        # Special case: if the user sends YES after a previous recommendation message,
+        # retain compatibility but calculate using currently selected feeds only.
+        if text_lower in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii', 'ndiyo', 'sawa sawa']:
+            if validate_and_start_calculation():
+                return xml_response()
+
+        feed_key = 'feed_selection_pig' if session.get('species') == 'pig' else 'feed_selection_chicken'
+        msg.body(get_msg(phone, 'select_at_least_2') + "\n\n" + get_msg(phone, feed_key))
+        return xml_response()
 
     # ============================================================
-    # STEP 3 or 4: FEED SELECTION
-    # ============================================================
-    if session['step'] in [3, 4]:
-        # Check if user is confirming recommendations
-        if text_lower in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii', 'ndiyo', 'sawa sawa'] and session['step'] == 4:
-            # Combine feeds + recommendations and calculate
-            all_feeds = list(set(session.get('feeds', []) + session.get('recommended_feeds', [])))
-            session['feeds'] = all_feeds
-
-            # Validate
-            available = {fid: FEEDS_DB[fid] for fid in all_feeds if fid in FEEDS_DB}
-            energy_count = sum(1 for f in available.values() if f['category'] == 'energy')
-            if energy_count == 0:
-                msg.body(get_msg(phone, 'no_energy_error'))
-                return Response(content=str(resp), media_type="application/xml")
-
-            total_min = sum(FEEDS_DB[fid]['min_incl'] for fid in all_feeds if fid in FEEDS_DB)
-            if total_min > 100:
-                offenders = [FEEDS_DB[fid]['name'] + f" (min {FEEDS_DB[fid]['min_incl']}%)"
-                             for fid in all_feeds if fid in FEEDS_DB and FEEDS_DB[fid]['min_incl'] > 0]
-                msg.body(get_msg(phone, 'impossible_mins', total_min=total_min, offenders=', '.join(offenders)))
-                session['step'] = 0
-                return Response(content=str(resp), media_type="application/xml")
-
-            msg.body(get_msg(phone, 'calculating'))
-            session['step'] = 0
-            background_tasks.add_task(
-                process_ration_and_reply, phone, session['profile'], 
-                all_feeds, session.get('lang', 'en'), session.get('species', 'pig')
-            )
-            return Response(content=str(resp), media_type="application/xml")
-
-        # Try to parse feeds from text — LOCAL FIRST, then Gemini
-        selected_nums = []
-
-        # 1) Try comma-separated numbers (e.g. "1,3,6")
-        parts = [s.strip() for s in text.split(",")]
-        for p in parts:
-            if p in FEED_NUMBER_MAP:
-                selected_nums.append(p)
-
-        # 2) If no numbers found, try natural language names locally
-        if not selected_nums:
-            text_clean = text_lower.replace(' ', '_').replace(',', ' ')
-            words = text_clean.split()
-            for word in words:
-                if word in FEED_NAME_TO_NUMBER:
-                    selected_nums.append(FEED_NAME_TO_NUMBER[word])
-                else:
-                    # fuzzy match
-                    for key, num in FEED_NAME_TO_NUMBER.items():
-                        if key in word or word in key:
-                            selected_nums.append(num)
-                            break
-
-        # 3) Only if still nothing, try Gemini
-        if not selected_nums and gemini_client and len(text) > 2:
-            gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
-            if gemini_data and gemini_data.get('confidence', 0) >= 0.5:
-                feeds = gemini_data.get('feeds', [])
-                for f in feeds:
-                    f_lower = f.lower().strip().replace(' ', '_')
-                    if f_lower in FEED_NAME_TO_NUMBER:
-                        selected_nums.append(FEED_NAME_TO_NUMBER[f_lower])
-                    else:
-                        for key, num in FEED_NAME_TO_NUMBER.items():
-                            if key in f_lower or f_lower in key:
-                                selected_nums.append(num)
-                                break
-
-        # Convert numbers to feed IDs
-        feed_ids = [FEED_NUMBER_MAP[n] for n in selected_nums if n in FEED_NUMBER_MAP]
-        feed_ids = list(set(feed_ids))  # dedupe
-
-        if not feed_ids:
-            feed_key = 'feed_selection_pig' if session.get('species') == 'pig' else 'feed_selection_chicken'
-            msg.body(get_msg(phone, 'select_at_least_2') + "\n\n" + get_msg(phone, feed_key))
-            return Response(content=str(resp), media_type="application/xml")
-
-        # Merge with existing feeds (PRESERVE — don't overwrite)
-        existing = session.get('feeds', [])
-        all_feeds = list(set(existing + feed_ids))
-        session['feeds'] = all_feeds
-
-        # Check minimum requirements
-        if len(all_feeds) < 2:
-            feed_key = 'feed_selection_pig' if session.get('species') == 'pig' else 'feed_selection_chicken'
-            msg.body(get_msg(phone, 'ask_more_feeds') + "\n\n" + get_msg(phone, feed_key))
-            return Response(content=str(resp), media_type="application/xml")
-
-        available = {fid: FEEDS_DB[fid] for fid in all_feeds if fid in FEEDS_DB}
-        energy_count = sum(1 for f in available.values() if f['category'] == 'energy')
-        if energy_count == 0:
-            msg.body(get_msg(phone, 'no_energy_error'))
-            return Response(content=str(resp), media_type="application/xml")
-
-        # Get recommendations for gaps
-        rec_keys = analyze_feed_gaps(session['profile'], all_feeds)
-
-        if rec_keys:
-            # Build recommended feed list
-            rec_nums = []
-            if 'rec_energy' in rec_keys:
-                rec_nums.append(('maize_grain', '1'))
-            if 'rec_protein' in rec_keys:
-                rec_nums.append(('soybean_meal', '6'))
-            if 'rec_mineral' in rec_keys:
-                rec_nums.append(('limestone', '11'))
-            if 'rec_salt' in rec_keys:
-                rec_nums.append(('salt', '15'))
-            if 'rec_premix' in rec_keys:
-                rec_nums.append(('vitamin_mineral_premix', '14'))
-            if 'rec_calcium_layer' in rec_keys:
-                rec_nums.append(('oyster_shell', '13'))
-            if 'rec_lysine_pig' in rec_keys:
-                rec_nums.append(('lysine', '17'))
-            if 'rec_methionine_broiler' in rec_keys:
-                rec_nums.append(('methionine', '16'))
-
-            # Filter out already selected
-            rec_feeds = [fid for fid, num in rec_nums if fid not in all_feeds]
-            session['recommended_feeds'] = rec_feeds
-            session['step'] = 4
-
-            rec_msg = format_recommendations(phone, session['profile'], all_feeds)
-            msg.body(rec_msg)
-        else:
-            # No gaps, calculate directly
-            total_min = sum(FEEDS_DB[fid]['min_incl'] for fid in all_feeds if fid in FEEDS_DB)
-            if total_min > 100:
-                offenders = [FEEDS_DB[fid]['name'] + f" (min {FEEDS_DB[fid]['min_incl']}%)"
-                             for fid in all_feeds if fid in FEEDS_DB and FEEDS_DB[fid]['min_incl'] > 0]
-                msg.body(get_msg(phone, 'impossible_mins', total_min=total_min, offenders=', '.join(offenders)))
-                session['step'] = 0
-                return Response(content=str(resp), media_type="application/xml")
-
-            msg.body(get_msg(phone, 'calculating'))
-            session['step'] = 0
-            background_tasks.add_task(
-                process_ration_and_reply, phone, session['profile'], 
-                all_feeds, session.get('lang', 'en'), session.get('species', 'pig')
-            )
-
-        return Response(content=str(resp), media_type="application/xml")
-
-
-    # ============================================================
-    # FALLBACK: Try Gemini for any unrecognized message
-    # CRITICAL FIX: Never overwrite existing species/stage/profile with nulls
+    # LAST-CHANCE GEMINI PARSER
     # ============================================================
     if gemini_client and len(text) > 2:
-        gemini_data = gemini_parse_natural_language(text, session.get('lang', 'en'))
-        if gemini_data and gemini_data.get('confidence', 0) >= 0.6:
-            intent = gemini_data.get('intent', 'unknown')
+        data = gemini_parse_natural_language(text, session.get('lang', 'en'))
+        if data and data.get('confidence', 0) >= 0.5:
+            apply_parsed_data(data)
+            if session.get('species') and session.get('profile') and len(session.get('feeds', [])) >= 2:
+                validate_and_start_calculation()
+                return xml_response()
 
-            if intent == 'greeting':
-                msg.body(get_msg(phone, 'generic_help'))
-                return Response(content=str(resp), media_type="application/xml")
-
-            # Update language if provided and valid
-            if gemini_data.get('lang') in ['en', 'sw', 'ki', 'mer']:
-                session['lang'] = gemini_data['lang']
-
-            # FIXED: Only set species if we don't already have one AND Gemini returned one
-            species = gemini_data.get('species')
-            if species in ['pig', 'chicken'] and not session.get('species'):
-                session['species'] = species
-                session['step'] = 2
-
-            # FIXED: Only set stage/profile if we don't already have one AND Gemini returned one
-            stage = gemini_data.get('stage')
-            if stage and stage in STAGE_MAP and not session.get('profile'):
-                session['profile'] = STAGE_MAP[stage]
-                session['step'] = 3
-
-            # Parse feeds from Gemini (merge, don't overwrite)
-            feeds = gemini_data.get('feeds', [])
-            feed_nums = []
-            for f in feeds:
-                f_lower = f.lower().strip().replace(' ', '_')
-                if f_lower in FEED_NAME_TO_NUMBER:
-                    feed_nums.append(FEED_NAME_TO_NUMBER[f_lower])
-                else:
-                    for key, num in FEED_NAME_TO_NUMBER.items():
-                        if key in f_lower or f_lower in key:
-                            feed_nums.append(num)
-                            break
-
-            if feed_nums:
-                existing = session.get('feeds', [])
-                new_feeds = [FEED_NUMBER_MAP[n] for n in feed_nums if n in FEED_NUMBER_MAP]
-                all_feeds = list(set(existing + new_feeds))
-                session['feeds'] = all_feeds
-
-            # Determine next step based on what's missing
-            if not session.get('species'):
-                session['step'] = 1
-                msg.body(get_msg(phone, 'choose_species'))
-                return Response(content=str(resp), media_type="application/xml")
-            elif not session.get('profile'):
-                session['step'] = 2
-                if session['species'] == 'pig':
-                    msg.body(get_msg(phone, 'choose_pig'))
-                else:
-                    msg.body(get_msg(phone, 'choose_chicken'))
-                return Response(content=str(resp), media_type="application/xml")
-            elif len(session.get('feeds', [])) < 2:
-                session['step'] = 3
-                feed_key = 'feed_selection_pig' if session['species'] == 'pig' else 'feed_selection_chicken'
-                msg.body(get_msg(phone, 'ask_more_feeds') + "\n\n" + get_msg(phone, feed_key))
-                return Response(content=str(resp), media_type="application/xml")
-            else:
-                # We have everything, show recommendations or calculate
-                session['step'] = 4
-                rec_keys = analyze_feed_gaps(session['profile'], session['feeds'])
-                if rec_keys:
-                    rec_nums = []
-                    if 'rec_energy' in rec_keys: rec_nums.append(('maize_grain', '1'))
-                    if 'rec_protein' in rec_keys: rec_nums.append(('soybean_meal', '6'))
-                    if 'rec_mineral' in rec_keys: rec_nums.append(('limestone', '11'))
-                    if 'rec_salt' in rec_keys: rec_nums.append(('salt', '15'))
-                    if 'rec_premix' in rec_keys: rec_nums.append(('vitamin_mineral_premix', '14'))
-                    if 'rec_calcium_layer' in rec_keys: rec_nums.append(('oyster_shell', '13'))
-                    if 'rec_lysine_pig' in rec_keys: rec_nums.append(('lysine', '17'))
-                    if 'rec_methionine_broiler' in rec_keys: rec_nums.append(('methionine', '16'))
-                    rec_feeds = [fid for fid, num in rec_nums if fid not in session['feeds']]
-                    session['recommended_feeds'] = rec_feeds
-                    rec_msg = format_recommendations(phone, session['profile'], session['feeds'])
-                    msg.body(rec_msg)
-                else:
-                    msg.body(get_msg(phone, 'calculating'))
-                    session['step'] = 0
-                    background_tasks.add_task(
-                        process_ration_and_reply, phone, session['profile'], 
-                        session['feeds'], session.get('lang', 'en'), session.get('species', 'pig')
-                    )
-                return Response(content=str(resp), media_type="application/xml")
-        else:
-            # Gemini returned low confidence or failed
-            msg.body(get_msg(phone, 'gemini_error'))
-            return Response(content=str(resp), media_type="application/xml")
-
-    # Default help
     msg.body(get_msg(phone, 'generic_help'))
-    return Response(content=str(resp), media_type="application/xml")
+    return xml_response()
 
 
 # ============================================================
