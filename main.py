@@ -876,14 +876,24 @@ def format_ration(phone, result, species):
     return msg
 
 
-def format_suppliers(phone, feed_ids):
-    m = lambda k, **kw: get_msg(phone, k, **kw)
+def format_suppliers(user_phone, feed_ids):
+    # Avoid a name collision: supplier_item legitimately passes phone=...
+    # while get_msg() also has phone as its first positional argument.
+    m = lambda k, **kw: get_msg(user_phone, k, **kw)
+
     suppliers = find_suppliers_for_feeds(feed_ids)
     if not suppliers:
         return f"\n\n{m('supplier_na')}"
+
     msg = f"\n\n*{m('supplier_header')}*\n"
     for sup in suppliers:
-        msg += m('supplier_item', name=sup['name'], phone=sup['phone'], location=sup['location'], stock=sup['stock']) + "\n"
+        msg += m(
+            'supplier_item',
+            name=sup['name'],
+            phone=sup['phone'],
+            location=sup['location'],
+            stock=sup['stock']
+        ) + "\n"
     return msg
 
 
