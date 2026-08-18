@@ -888,20 +888,46 @@ def format_ration_message(phone, result):
 # SEND WHATSAPP MESSAGE (for background results)
 # ============================================================
 def send_whatsapp_message(to_number, body):
-    """Send a message via Twilio REST API (not TwiML)."""
+    """Send a message via Twilio REST API, auto-splitting at 1500 chars."""
     if not client:
-        print(f"[TWILIO] No client configured, would send to {to_number}: {body[:100]}...")
+        print(f"[TWILIO] No client, would send to {to_number}: {body[:100]}...")
         return
     try:
-        message = client.messages.create(
-            from_=TWILIO_NUMBER,
-            body=body,
-            to=to_number
-        )
-        print(f"[TWILIO] Sent message SID: {message.sid}")
+        # Split into chunks of 1500 chars (safe margin under 1600)
+        MAX_LEN = 1500
+        if len(body) <= MAX_LEN:
+            message = client.messages.create(
+                from_=TWILIO_NUMBER,
+                body=body,
+                to=to_number
+            )
+            print(f"[TWILIO] Sent SID: {message.sid} ({len(body)} chars)")
+        else:
+            # Split at newline boundaries to avoid cutting mid-line
+            chunks = []
+            remaining = body
+            while len(remaining) > MAX_LEN:
+                # Find last newline before limit
+                split_at = remaining.rfind('\n', 0, MAX_LEN)
+                if split_at <= 0:
+                    split_at = MAX_LEN  # force split if no newline found
+                chunks.append(remaining[:split_at].strip())
+                remaining = remaining[split_at:].strip()
+            if remaining:
+                chunks.append(remaining)
+
+            for i, chunk in enumerate(chunks):
+                message = client.messages.create(
+                    from_=TWILIO_NUMBER,
+                    body=chunk,
+                    to=to_number
+                )
+                print(f"[TWILIO] Part {i+1}/{len(chunks)} SID: {message.sid} ({len(chunk)} chars)")
+                # Small delay between parts so they arrive in order
+                if i < len(chunks) - 1:
+                    time.sleep(0.5)
     except Exception as e:
         print(f"[TWILIO] Send error: {e}")
-
 
 # ============================================================
 # BACKGROUND CALCULATION TASK
