@@ -67,7 +67,7 @@ def solve_ration(pk,sf):
     if pulp.LpStatus[prob.status]!='Optimal':
         prob2=pulp.LpProblem(f"R_{pk}_be",pulp.LpMinimize)
         fv2=pulp.LpVariable.dicts("FB",av.keys(),lowBound=0,upBound=100)
-        su={},so={}
+        su={}; so={}
         for n in ns:
             if n in pr: su[n]=pulp.LpVariable(f"u_{n}",lowBound=0); so[n]=pulp.LpVariable(f"o_{n}",lowBound=0)
         obj=pulp.lpSum([100000*su[n]+100000*so[n] for n in su])+pulp.lpSum([fv2[f]*av[f]['cost_kg'] for f in av])
