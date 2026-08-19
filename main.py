@@ -1127,9 +1127,9 @@ async def whatsapp_webhook(
         return Response(content=str(resp), media_type="application/xml")
 
     # ============================================================
-    # HANDLE START / RESET
+    # HANDLE START / RESET — always show language menu
     # ============================================================
-    if text_lower in ['start', 'hi', 'hello', 'help', '0', 'mwanzo', 'anza', 'anza upya']:
+    if text_lower in ['start', '0', 'anza', 'anza upya', 'mwanzo', 'upya', 'reset']:
         # Save history before reset
         if session.get('profile') and session.get('feeds'):
             session['history'].append({
@@ -1140,6 +1140,7 @@ async def whatsapp_webhook(
             # Keep only last 3
             session['history'] = session['history'][-3:]
 
+        # HARD RESET — clear everything including active session
         session['step'] = -1
         session['species'] = None
         session['profile'] = None
@@ -1147,8 +1148,16 @@ async def whatsapp_webhook(
         session['recommended_feeds'] = []
         session['ai_detected_feeds'] = None
 
-        # If they have history, greet them with memory
-        if session['history']:
+        # Always show language menu on explicit START/reset
+        msg.body(get_msg(phone, 'choose_language'))
+        return Response(content=str(resp), media_type="application/xml")
+
+    # ============================================================
+    # HANDLE GREETING / HELP — show memory if we know them
+    # ============================================================
+    if text_lower in ['hi', 'hello', 'help', 'habari', 'sasa', 'niaje']:
+        # If they have a completed history, greet with memory
+        if session.get('history'):
             last = session['history'][-1]
             profile_name = ALL_PROFILES.get(last['profile'], {}).get('name', last['profile'])
             feed_names = [FEEDS_DB[FEED_NUMBER_MAP.get(f, f)]['name'] for f in last['feeds'] if f in FEEDS_DB or f in FEED_NUMBER_MAP.values()]
