@@ -1,7 +1,7 @@
 # ============================================================
-# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.1
-# Fixes: Session memory, recommendation engine, no looping,
-#        smart natural language flow, accurate least-cost LP
+# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.2
+# Fixes: Unified numbering, removed forages, added ingredients,
+#        robust error handling, no silent crashes.
 # ============================================================
 
 import os
@@ -65,8 +65,8 @@ MESSAGES = {
         'choose_species': "Step 1: Choose your animal:\n\n1️⃣ Pigs (Gruwe)\n2️⃣ Chickens (Kuku)\n\nReply with 1 or 2.",
         'choose_pig': "Step 2: Choose pig type:\n\n1️⃣ Weaner (10-20kg)\n2️⃣ Grower (20-50kg)\n3️⃣ Finisher (50-100kg)\n4️⃣ Gestating Sow\n5️⃣ Lactating Sow\n\nReply with 1-5.",
         'choose_chicken': "Step 2: Choose chicken type:\n\n1️⃣ Broiler Starter (0-3 wks)\n2️⃣ Broiler Grower (3-6 wks)\n3️⃣ Broiler Finisher (6-8 wks)\n4️⃣ Layer Starter (0-6 wks)\n5️⃣ Layer Grower (6-18 wks)\n6️⃣ Laying Hen (18+ wks)\n\nReply with 1-6.",
-        'feed_selection_pig': "Step 3: Which feeds do you have?\nSend numbers separated by commas (e.g., 1,3,5,7,9):\n\nENERGY:\n1️⃣ Maize Grain (KES 30/kg)\n2️⃣ Wheat Bran (KES 20/kg)\n3️⃣ Rice Bran (KES 22/kg)\n4️⃣ Cassava Chips (KES 18/kg)\n5️⃣ Sweet Potato Vines (KES 5/kg)\n\nPROTEIN:\n6️⃣ Soybean Meal (KES 75/kg)\n7️⃣ Sunflower Cake (KES 55/kg)\n8️⃣ Cottonseed Cake (KES 60/kg)\n9️⃣ Fish Meal (KES 120/kg)\n🔟 Brewers Grains (KES 15/kg)\n\nFORAGE/ROUGHAGE:\n11️⃣ Lucerne Hay (KES 35/kg)\n12️⃣ Grass Hay (KES 10/kg)\n\nADDITIVES:\n13️⃣ Limestone (KES 15/kg)\n14️⃣ Dicalcium Phosphate (KES 80/kg)\n15️⃣ Vitamin-Mineral Premix (KES 150/kg)\n16️⃣ Salt (KES 20/kg)\n17️⃣ Lysine Supplement (KES 200/kg)\n\nTip: Include at least 1 energy + 1 protein source.",
-        'feed_selection_chicken': "Step 3: Which feeds do you have?\nSend numbers separated by commas (e.g., 1,3,6,13,15):\n\nENERGY:\n1️⃣ Maize Grain (KES 30/kg)\n2️⃣ Wheat Bran (KES 20/kg)\n3️⃣ Rice Bran (KES 22/kg)\n4️⃣ Sorghum (KES 28/kg)\n5️⃣ Cassava Chips (KES 18/kg)\n\nPROTEIN:\n6️⃣ Soybean Meal (KES 75/kg)\n7️⃣ Sunflower Cake (KES 55/kg)\n8️⃣ Cottonseed Cake (KES 60/kg)\n9️⃣ Fish Meal (KES 120/kg)\n🔟 Blood Meal (KES 100/kg)\n\nMINERALS/ADDITIVES:\n11️⃣ Limestone (KES 15/kg)\n12️⃣ Dicalcium Phosphate (KES 80/kg)\n13️⃣ Oyster Shell — Layers (KES 25/kg)\n14️⃣ Vitamin-Mineral Premix (KES 150/kg)\n15️⃣ Salt (KES 20/kg)\n16️⃣ Methionine Supplement (KES 250/kg)\n17️⃣ Lysine Supplement (KES 200/kg)\n\nTip: Layers need high calcium. Broilers need high protein early.",
+        'feed_selection_pig': "Step 3: Which feeds do you have?\nSend numbers separated by commas (e.g., 1,3,5,7,9):\n\nENERGY:\n1️⃣ Maize Grain (KES 30/kg)\n2️⃣ Wheat Bran (KES 20/kg)\n3️⃣ Rice Bran (KES 22/kg)\n4️⃣ Sorghum (KES 28/kg)\n5️⃣ Cassava Chips (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEIN:\n8️⃣ Soybean Meal (KES 75/kg)\n9️⃣ Sunflower Cake (KES 55/kg)\n🔟 Cottonseed Cake (KES 60/kg)\n11️⃣ Fish Meal (KES 120/kg)\n12️⃣ Brewers Grains (KES 15/kg)\n13️⃣ Groundnut Cake (KES 65/kg)\n14️⃣ Sesame Cake (KES 58/kg)\n\nMINERALS/ADDITIVES:\n15️⃣ Limestone (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Vitamin-Mineral Premix (KES 150/kg)\n18️⃣ Salt (KES 20/kg)\n19️⃣ Lysine Supplement (KES 200/kg)\n\nTip: Include at least 1 energy + 1 protein source.",
+        'feed_selection_chicken': "Step 3: Which feeds do you have?\nSend numbers separated by commas (e.g., 1,3,8,15,17):\n\nENERGY:\n1️⃣ Maize Grain (KES 30/kg)\n2️⃣ Wheat Bran (KES 20/kg)\n3️⃣ Rice Bran (KES 22/kg)\n4️⃣ Sorghum (KES 28/kg)\n5️⃣ Cassava Chips (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEIN:\n8️⃣ Soybean Meal (KES 75/kg)\n9️⃣ Sunflower Cake (KES 55/kg)\n🔟 Cottonseed Cake (KES 60/kg)\n11️⃣ Fish Meal (KES 120/kg)\n12️⃣ Blood Meal (KES 100/kg)\n13️⃣ Groundnut Cake (KES 65/kg)\n14️⃣ Sesame Cake (KES 58/kg)\n\nMINERALS/ADDITIVES:\n15️⃣ Limestone (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Oyster Shell — Layers (KES 25/kg)\n18️⃣ Vitamin-Mineral Premix (KES 150/kg)\n19️⃣ Salt (KES 20/kg)\n20️⃣ Methionine Supplement (KES 250/kg)\n21️⃣ Lysine Supplement (KES 200/kg)\n\nTip: Layers need high calcium. Broilers need high protein early.",
         'ration_optimal': "✅ Your Balanced Ration (NRC)",
         'ration_besteffort': "✅ Your Best Ration (Closest Possible)",
         'profile_label': "🐷🐔",
@@ -81,10 +81,10 @@ MESSAGES = {
         'nutrient_low': "⚠️ {nutrient}: {actual} (target {min}-{max}) — slightly LOW",
         'nutrient_high': "⚠️ {nutrient}: {actual} (target {min}-{max}) — slightly HIGH",
         'ai_suggestions': "🤖 To improve next time, try adding:",
-        'no_energy_error': "❌ Please add at least one energy source (#1-5) for growth.",
+        'no_energy_error': "❌ Please add at least one energy source (#1-7) for growth.",
         'impossible_mins': "❌ IMPOSSIBLE: Your selected feeds must take up {total_min}%, but a ration is only 100%.\nOffenders: {offenders}\n→ Remove one or more feeds with high minimum requirements.",
         'unknown_feeds': "❌ Unknown feeds: {feeds}",
-        'select_at_least_2': "Please select at least 2 feeds.\nSend numbers like 1,3,6,13,15",
+        'select_at_least_2': "Please select at least 2 feeds.\nSend numbers like 1,3,8,15,17",
         'invalid_choice': "Please send a valid number.",
         'photo_detected': "📸 I can see: {feeds}\n\nReply YES to use these, or send your own numbers.",
         'photo_not_found': "📸 I could not identify feeds in the photo.",
@@ -101,17 +101,18 @@ MESSAGES = {
         'supplier_na': "📦 Supplier info not yet loaded. Add your local agrovet contacts.",
         'recommendations_header': "📋 RECOMMENDATIONS FOR YOUR RATION:",
         'rec_energy': "⚡ You need an ENERGY source (e.g., Maize #1, Wheat Bran #2) for growth and body maintenance.",
-        'rec_protein': "🥜 You need a PROTEIN source (e.g., Soybean Meal #6, Fish Meal #9) for muscle development.",
-        'rec_mineral': "🦴 You need MINERALS (e.g., Limestone #11, DCP #12, Premix #14, Salt #15) for bone health and metabolism.",
-        'rec_calcium_layer': "🥚 LAYERS need extra CALCIUM (Oyster Shell #13 or Limestone #11) for strong eggshells.",
-        'rec_lysine_pig': "🧬 Pig weaners/growers need LYSINE (#17) for fast growth.",
-        'rec_methionine_broiler': "🧬 Broilers need METHIONINE (#16) for feather and muscle growth.",
-        'rec_salt': "🧂 Add SALT (#15) — essential for all animals.",
-        'rec_premix': "💊 Add VITAMIN-MINERAL PREMIX (#14) — provides trace minerals and vitamins.",
+        'rec_protein': "🥜 You need a PROTEIN source (e.g., Soybean Meal #8, Fish Meal #11) for muscle development.",
+        'rec_mineral': "🦴 You need MINERALS (e.g., Limestone #15, DCP #16, Premix #18, Salt #19) for bone health and metabolism.",
+        'rec_calcium_layer': "🥚 LAYERS need extra CALCIUM (Oyster Shell #17 or Limestone #15) for strong eggshells.",
+        'rec_lysine_pig': "🧬 Pig weaners/growers need LYSINE (#19) for fast growth.",
+        'rec_methionine_broiler': "🧬 Broilers need METHIONINE (#20) for feather and muscle growth.",
+        'rec_salt': "🧂 Add SALT (#19) — essential for all animals.",
+        'rec_premix': "💊 Add VITAMIN-MINERAL PREMIX (#18) — provides trace minerals and vitamins.",
         'current_selection': "You currently have: {feeds}",
         'ask_confirm_recs': "Reply YES to calculate with these feeds + my recommendations, or send MORE feed numbers to add.",
         'ask_more_feeds': "You need at least 2 feeds (1 energy + 1 protein). Please send more feed numbers.",
         'memory_greeting': "👋 Welcome back! Last time you calculated a ration for {profile} using {feeds}.\n\nSend START for a new ration, or tell me what's changed.",
+        'calc_error': "❌ Calculation failed: {error}\n\nPlease send START to try again, or add different feeds.",
     },
     'sw': {
         'welcome': "🐷🐔 Karibu BalancedBora Gruwe-Kuku!\n\nNakuhesabu chakula bora kwa gharama nafuu kwa nguruwe au kuku wako.",
@@ -119,8 +120,8 @@ MESSAGES = {
         'choose_species': "Hatua 1: Chagua mnyama wako:\n\n1️⃣ Nguruwe (Gruwe)\n2️⃣ Kuku\n\nJibu kwa 1 au 2.",
         'choose_pig': "Hatua 2: Chagua aina ya nguruwe:\n\n1️⃣ Mtoto (10-20kg)\n2️⃣ Mkubwa (20-50kg)\n3️⃣ Mwisho (50-100kg)\n4️⃣ Tumbili Mjamzito\n5️⃣ Tumbili Ananyonyesha\n\nJibu kwa 1-5.",
         'choose_chicken': "Hatua 2: Chagua aina ya kuku:\n\n1️⃣ Broiler Mwanzo (0-3 wiki)\n2️⃣ Broiler Mkubwa (3-6 wiki)\n3️⃣ Broiler Mwisho (6-8 wiki)\n4️⃣ Layer Mwanzo (0-6 wiki)\n5️⃣ Layer Mkubwa (6-18 wiki)\n6️⃣ Layer Mzima (18+ wiki)\n\nJibu kwa 1-6.",
-        'feed_selection_pig': "Hatua 3: Chagua chakula ulicho nacho.\nTuma namba zikitenganishwa na koma (mfano, 1,3,5,7,9):\n\nNISHATI:\n1️⃣ Mahindi (KES 30/kg)\n2️⃣ Makapi ya Ngano (KES 20/kg)\n3️⃣ Makapi ya Mchele (KES 22/kg)\n4️⃣ Vipande vya Muhogo (KES 18/kg)\n5️⃣ Majani ya Viazi (KES 5/kg)\n\nPROTEINI:\n6️⃣ Mlo wa Soya (KES 75/kg)\n7️⃣ Keki ya Alizeti (KES 55/kg)\n8️⃣ Keki ya Pamba (KES 60/kg)\n9️⃣ Mlo wa Samaki (KES 120/kg)\n🔟 Makapi ya Bia (KES 15/kg)\n\nMAJANI:\n11️⃣ Majani ya Lucerne (KES 35/kg)\n12️⃣ Majani ya Nyasi (KES 10/kg)\n\nVITAMINI/MADINI:\n13️⃣ Mawe ya Chokaa (KES 15/kg)\n14️⃣ Dicalcium Phosphate (KES 80/kg)\n15️⃣ Premix ya Vitamin (KES 150/kg)\n16️⃣ Chumvi (KES 20/kg)\n17️⃣ Lysine (KES 200/kg)",
-        'feed_selection_chicken': "Hatua 3: Chagua chakula ulicho nacho.\nTuma namba zikitenganishwa na koma (mfano, 1,3,6,13,15):\n\nNISHATI:\n1️⃣ Mahindi (KES 30/kg)\n2️⃣ Makapi ya Ngano (KES 20/kg)\n3️⃣ Makapi ya Mchele (KES 22/kg)\n4️⃣ Sorghum (KES 28/kg)\n5️⃣ Vipande vya Muhogo (KES 18/kg)\n\nPROTEINI:\n6️⃣ Mlo wa Soya (KES 75/kg)\n7️⃣ Keki ya Alizeti (KES 55/kg)\n8️⃣ Keki ya Pamba (KES 60/kg)\n9️⃣ Mlo wa Samaki (KES 120/kg)\n🔟 Mlo wa Damu (KES 100/kg)\n\nMADINI/VITAMINI:\n11️⃣ Mawe ya Chokaa (KES 15/kg)\n12️⃣ Dicalcium Phosphate (KES 80/kg)\n13️⃣ Oyster Shell — Layers (KES 25/kg)\n14️⃣ Premix ya Vitamin (KES 150/kg)\n15️⃣ Chumvi (KES 20/kg)\n16️⃣ Methionine (KES 250/kg)\n17️⃣ Lysine (KES 200/kg)",
+        'feed_selection_pig': "Hatua 3: Chagua chakula ulicho nacho.\nTuma namba zikitenganishwa na koma (mfano, 1,3,5,7,9):\n\nNISHATI:\n1️⃣ Mahindi (KES 30/kg)\n2️⃣ Makapi ya Ngano (KES 20/kg)\n3️⃣ Makapi ya Mchele (KES 22/kg)\n4️⃣ Mtama (KES 28/kg)\n5️⃣ Vipande vya Muhogo (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEINI:\n8️⃣ Mlo wa Soya (KES 75/kg)\n9️⃣ Keki ya Alizeti (KES 55/kg)\n🔟 Keki ya Pamba (KES 60/kg)\n11️⃣ Mlo wa Samaki (KES 120/kg)\n12️⃣ Makapi ya Bia (KES 15/kg)\n13️⃣ Keki ya Karanga (KES 65/kg)\n14️⃣ Keki ya Simsim (KES 58/kg)\n\nMADINI/VITAMINI:\n15️⃣ Mawe ya Chokaa (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Premix ya Vitamin (KES 150/kg)\n18️⃣ Chumvi (KES 20/kg)\n19️⃣ Lysine (KES 200/kg)",
+        'feed_selection_chicken': "Hatua 3: Chagua chakula ulicho nacho.\nTuma namba zikitenganishwa na koma (mfano, 1,3,8,15,17):\n\nNISHATI:\n1️⃣ Mahindi (KES 30/kg)\n2️⃣ Makapi ya Ngano (KES 20/kg)\n3️⃣ Makapi ya Mchele (KES 22/kg)\n4️⃣ Mtama (KES 28/kg)\n5️⃣ Vipande vya Muhogo (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEINI:\n8️⃣ Mlo wa Soya (KES 75/kg)\n9️⃣ Keki ya Alizeti (KES 55/kg)\n🔟 Keki ya Pamba (KES 60/kg)\n11️⃣ Mlo wa Samaki (KES 120/kg)\n12️⃣ Mlo wa Damu (KES 100/kg)\n13️⃣ Keki ya Karanga (KES 65/kg)\n14️⃣ Keki ya Simsim (KES 58/kg)\n\nMADINI/VITAMINI:\n15️⃣ Mawe ya Chokaa (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Oyster Shell — Layers (KES 25/kg)\n18️⃣ Premix ya Vitamin (KES 150/kg)\n19️⃣ Chumvi (KES 20/kg)\n20️⃣ Methionine (KES 250/kg)\n21️⃣ Lysine (KES 200/kg)",
         'ration_optimal': "✅ Chakula Chako Bora (NRC)",
         'ration_besteffort': "✅ Chakula Chako Bora Zaidi (Uwezekano wa Karibu)",
         'profile_label': "🐷🐔",
@@ -135,10 +136,10 @@ MESSAGES = {
         'nutrient_low': "⚠️ {nutrient}: {actual} (lengo {min}-{max}) — CHINI kidogo",
         'nutrient_high': "⚠️ {nutrient}: {actual} (lengo {min}-{max}) — JUU kidogo",
         'ai_suggestions': "🤖 Kuboresha wakati ujao, jaribu kuongeza:",
-        'no_energy_error': "❌ Tafadhali ongeza chanzo cha nishati angalau kimoja (#1-5).",
+        'no_energy_error': "❌ Tafadhali ongeza chanzo cha nishati angalau kimoja (#1-7).",
         'impossible_mins': "❌ HAIWEZEKANI: Chakula ulichochagua lazima chukue {total_min}%.\nWaliokosea: {offenders}",
         'unknown_feeds': "❌ Chakula isiyojulikana: {feeds}",
-        'select_at_least_2': "Tafadhali chagua angalau chakula 2.\nTuma namba kama 1,3,6,13,15",
+        'select_at_least_2': "Tafadhali chagua angalau chakula 2.\nTuma namba kama 1,3,8,15,17",
         'invalid_choice': "Tafadhali tuma namba sahihi.",
         'photo_detected': "📸 Naona: {feeds}\n\nJibu NDIYO kutumia hivi.",
         'photo_not_found': "📸 Sikuweza kutambua chakula katika picha.",
@@ -155,17 +156,18 @@ MESSAGES = {
         'supplier_na': "📦 Taarifa ya muuzaji bado haijawekwa. Ongeza mawasiliano ya agrovet yako.",
         'recommendations_header': "📋 MAPENDEKEZO KWA CHAKULA CHAKO:",
         'rec_energy': "⚡ Unahitaji chanzo cha NISHATI (k.m. Mahindi #1, Makapi ya Ngano #2) kwa ukuaji na afya ya mwili.",
-        'rec_protein': "🥜 Unahitaji chanzo cha PROTEINI (k.m. Mlo wa Soya #6, Mlo wa Samaki #9) kwa misuli.",
-        'rec_mineral': "🦴 Unahitaji MADINI (k.m. Mawe ya Chokaa #11, DCP #12, Premix #14, Chumvi #15) kwa mifupa na metabolism.",
-        'rec_calcium_layer': "🥚 LAYERS wanahitaji CALCIUM zaidi (Oyster Shell #13 au Mawe ya Chokaa #11) kwa mayai mazuri.",
-        'rec_lysine_pig': "🧬 Nguruwe wadogo/makubwa wanahitaji LYSINE (#17) kwa ukuaji wa haraka.",
-        'rec_methionine_broiler': "🧬 Broilers wanahitaji METHIONINE (#16) kwa manyoya na misuli.",
-        'rec_salt': "🧂 Ongeza CHUMVI (#15) — muhimu kwa wanyama wote.",
-        'rec_premix': "💊 Ongeza PREMIX ya VITAMIN-MADINI (#14) — inatoa madini na vitamini vya kutosha.",
+        'rec_protein': "🥜 Unahitaji chanzo cha PROTEINI (k.m. Mlo wa Soya #8, Mlo wa Samaki #11) kwa misuli.",
+        'rec_mineral': "🦴 Unahitaji MADINI (k.m. Mawe ya Chokaa #15, DCP #16, Premix #18, Chumvi #19) kwa mifupa na metabolism.",
+        'rec_calcium_layer': "🥚 LAYERS wanahitaji CALCIUM zaidi (Oyster Shell #17 au Mawe ya Chokaa #15) kwa mayai mazuri.",
+        'rec_lysine_pig': "🧬 Nguruwe wadogo/makubwa wanahitaji LYSINE (#19) kwa ukuaji wa haraka.",
+        'rec_methionine_broiler': "🧬 Broilers wanahitaji METHIONINE (#20) kwa manyoya na misuli.",
+        'rec_salt': "🧂 Ongeza CHUMVI (#19) — muhimu kwa wanyama wote.",
+        'rec_premix': "💊 Ongeza PREMIX ya VITAMIN-MADINI (#18) — inatoa madini na vitamini vya kutosha.",
         'current_selection': "Ulichonacho sasa: {feeds}",
         'ask_confirm_recs': "Jibu NDIYO kuhesabu na chakula hiki + mapendekezo yangu, au tuma namba ZAIDI za chakula cha kuongeza.",
         'ask_more_feeds': "Unahitaji chakula angalau 2 (1 nishati + 1 proteini). Tafadhali tuma namba zaidi za chakula.",
         'memory_greeting': "👋 Karibu tena! Mara ya mwisho ulihesabu chakula kwa {profile} ukitumia {feeds}.\n\nTuma START kwa chakula kipya, au niambie kilichobadilika.",
+        'calc_error': "❌ Hesabu imeshindwa: {error}\n\nTafadhali tuma START kujaribu tena, au ongeza chakula tofauti.",
     },
     'ki': {
         'welcome': "🐷🐔 Wî mwega BalancedBora Gruwe-Kuku!\n\nNîndîrathîrîria irio rîtheru ya nguruwe kana ngûkû.",
@@ -173,8 +175,8 @@ MESSAGES = {
         'choose_species': "Hatua 1: Thagua nyamû:\n\n1️⃣ Nguruwe (Gruwe)\n2️⃣ Ngûkû\n\nCokeria na 1 kana 2.",
         'choose_pig': "Hatua 2: Thagua nguruwe:\n\n1️⃣ Kîhîî (10-20kg)\n2️⃣ Mûnene (20-50kg)\n3️⃣ Mûthî (50-100kg)\n4️⃣ Tumbili Mûkûrû\n5️⃣ Tumbili Kûnyonithia\n\nCokeria na 1-5.",
         'choose_chicken': "Hatua 2: Thagua ngûkû:\n\n1️⃣ Broiler Kîhîî (0-3 wiki)\n2️⃣ Broiler Mûnene (3-6 wiki)\n3️⃣ Broiler Mûthî (6-8 wiki)\n4️⃣ Layer Kîhîî (0-6 wiki)\n5️⃣ Layer Mûnene (6-18 wiki)\n6️⃣ Layer Mûkûrû (18+ wiki)\n\nCokeria na 1-6.",
-        'feed_selection_pig': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,5,7,9):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Muhogo (KES 18/kg)\n5️⃣ Majani ma Viazi (KES 5/kg)\n\nPROTEINI:\n6️⃣ Mlo wa Soya (KES 75/kg)\n7️⃣ Keki ya Alizeti (KES 55/kg)\n8️⃣ Keki ya Pamba (KES 60/kg)\n9️⃣ Mlo wa Thamaki (KES 120/kg)\n🔟 Makapi ma Bia (KES 15/kg)\n\nMAJANI:\n11️⃣ Majani ma Lucerne (KES 35/kg)\n12️⃣ Majani ma Nyasi (KES 10/kg)\n\nVITAMINI/MADINI:\n13️⃣ Mawe ma Chokaa (KES 15/kg)\n14️⃣ Dicalcium Phosphate (KES 80/kg)\n15️⃣ Premix (KES 150/kg)\n16️⃣ Chumvi (KES 20/kg)\n17️⃣ Lysine (KES 200/kg)",
-        'feed_selection_chicken': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,6,13,15):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Sorghum (KES 28/kg)\n5️⃣ Muhogo (KES 18/kg)\n\nPROTEINI:\n6️⃣ Mlo wa Soya (KES 75/kg)\n7️⃣ Keki ya Alizeti (KES 55/kg)\n8️⃣ Keki ya Pamba (KES 60/kg)\n9️⃣ Mlo wa Thamaki (KES 120/kg)\n🔟 Mlo wa Rûtî (KES 100/kg)\n\nMADINI/VITAMINI:\n11️⃣ Mawe ma Chokaa (KES 15/kg)\n12️⃣ Dicalcium Phosphate (KES 80/kg)\n13️⃣ Oyster Shell — Layers (KES 25/kg)\n14️⃣ Premix (KES 150/kg)\n15️⃣ Chumvi (KES 20/kg)\n16️⃣ Methionine (KES 250/kg)\n17️⃣ Lysine (KES 200/kg)",
+        'feed_selection_pig': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,5,7,9):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Mtama (KES 28/kg)\n5️⃣ Muhogo (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEINI:\n8️⃣ Mlo wa Soya (KES 75/kg)\n9️⃣ Keki ya Alizeti (KES 55/kg)\n🔟 Keki ya Pamba (KES 60/kg)\n11️⃣ Mlo wa Thamaki (KES 120/kg)\n12️⃣ Makapi ma Bia (KES 15/kg)\n13️⃣ Keki ya Karanga (KES 65/kg)\n14️⃣ Keki ya Simsim (KES 58/kg)\n\nVITAMINI/MADINI:\n15️⃣ Mawe ma Chokaa (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Premix (KES 150/kg)\n18️⃣ Chumvi (KES 20/kg)\n19️⃣ Lysine (KES 200/kg)",
+        'feed_selection_chicken': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,8,15,17):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Mtama (KES 28/kg)\n5️⃣ Muhogo (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEINI:\n8️⃣ Mlo wa Soya (KES 75/kg)\n9️⃣ Keki ya Alizeti (KES 55/kg)\n🔟 Keki ya Pamba (KES 60/kg)\n11️⃣ Mlo wa Thamaki (KES 120/kg)\n12️⃣ Mlo wa Rûtî (KES 100/kg)\n13️⃣ Keki ya Karanga (KES 65/kg)\n14️⃣ Keki ya Simsim (KES 58/kg)\n\nMADINI/VITAMINI:\n15️⃣ Mawe ma Chokaa (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Oyster Shell — Layers (KES 25/kg)\n18️⃣ Premix (KES 150/kg)\n19️⃣ Chumvi (KES 20/kg)\n20️⃣ Methionine (KES 250/kg)\n21️⃣ Lysine (KES 200/kg)",
         'ration_optimal': "✅ Irio Rîaku Rîtheru (NRC)",
         'ration_besteffort': "✅ Irio Rîaku Rîtheru Zaidi (Kûgîa Gûtîrî)",
         'profile_label': "🐷🐔",
@@ -189,10 +191,10 @@ MESSAGES = {
         'nutrient_low': "⚠️ {nutrient}: {actual} (gûtîrî {min}-{max}) — CHINI hûgûrû",
         'nutrient_high': "⚠️ {nutrient}: {actual} (gûtîrî {min}-{max}) — JUU hûgûrû",
         'ai_suggestions': "🤖 Kûboresha thutha wa gûku, geria kuongeza:",
-        'no_energy_error': "❌ Tafadhali ongera chanzo cha hoti (#1-5).",
+        'no_energy_error': "❌ Tafadhali ongera chanzo cha hoti (#1-7).",
         'impossible_mins': "❌ HAIWEZEKANI: Irio lazima cûkue {total_min}%.\nArîa mekosea: {offenders}",
         'unknown_feeds': "❌ Irio itarîmenyekana: {feeds}",
-        'select_at_least_2': "Tafadhali thagua angalau irio 2.\nTuma namba ta 1,3,6,13,15",
+        'select_at_least_2': "Tafadhali thagua angalau irio 2.\nTuma namba ta 1,3,8,15,17",
         'invalid_choice': "Tafadhali tuma namba sahihi.",
         'photo_detected': "📸 Nîmona: {feeds}\n\nCokeria II.",
         'photo_not_found': "📸 Nîndîratambua irio kûranî rûtûni.",
@@ -209,17 +211,18 @@ MESSAGES = {
         'supplier_na': "📦 Taarifa ya mûgûrî bado ti îkî. Ongeza mawasiliano ya agrovet yaku.",
         'recommendations_header': "📋 MAENDELEZO KWA IRIO RÎAKU:",
         'rec_energy': "⚡ Wîna bata ciana cia HOTI (k.m. Mûbî #1, Makapi ma Ngano #2) kwa ukuaji na ûhooro wa mwîrî.",
-        'rec_protein': "🥜 Wîna bata ciana cia PROTEINI (k.m. Mlo wa Soya #6, Mlo wa Thamaki #9) kwa misuli.",
-        'rec_mineral': "🦴 Wîna bata MADINI (k.m. Mawe ma Chokaa #11, DCP #12, Premix #14, Chumvi #15) kwa mifupa.",
-        'rec_calcium_layer': "🥚 LAYERS nî bata CALCIUM ingî (Oyster Shell #13 kana Mawe ma Chokaa #11) kwa mayai matheru.",
-        'rec_lysine_pig': "🧬 Nguruwe nî bata LYSINE (#17) kwa ukuaji wa haraka.",
-        'rec_methionine_broiler': "🧬 Broilers nî bata METHIONINE (#16) kwa manyoya na misuli.",
-        'rec_salt': "🧂 Ongera CHUMVI (#15) — muhimu kwa nyamû o yothe.",
-        'rec_premix': "💊 Ongera PREMIX (#14) — ina vitamini na madini.",
+        'rec_protein': "🥜 Wîna bata ciana cia PROTEINI (k.m. Mlo wa Soya #8, Mlo wa Thamaki #11) kwa misuli.",
+        'rec_mineral': "🦴 Wîna bata MADINI (k.m. Mawe ma Chokaa #15, DCP #16, Premix #18, Chumvi #19) kwa mifupa.",
+        'rec_calcium_layer': "🥚 LAYERS nî bata CALCIUM ingî (Oyster Shell #17 kana Mawe ma Chokaa #15) kwa mayai matheru.",
+        'rec_lysine_pig': "🧬 Nguruwe nî bata LYSINE (#19) kwa ukuaji wa haraka.",
+        'rec_methionine_broiler': "🧬 Broilers nî bata METHIONINE (#20) kwa manyoya na misuli.",
+        'rec_salt': "🧂 Ongera CHUMVI (#19) — muhimu kwa nyamû o yothe.",
+        'rec_premix': "💊 Ongera PREMIX (#18) — ina vitamini na madini.",
         'current_selection': "Wîrî na rîo: {feeds}",
         'ask_confirm_recs': "Cokeria II kûhûthia na irio icio + maendekezo makwa, kana tûma namba ingî cia irio.",
         'ask_more_feeds': "Wîna bata irio 2 (1 hoti + 1 proteini). Tafadhali tûma namba ingî cia irio.",
         'memory_greeting': "👋 Wî mwega! Mûthenya wa gûkû ûrathîrîririe irio rîtheru kwa {profile} ukitumia {feeds}.\n\nTuma START kûgîa rîngî, kana ûgîe ûrî na gûtûmîra.",
+        'calc_error': "❌ Hesabu yagire: {error}\n\nTuma START kûgîa rîngî, kana ongera irio ingî.",
     },
     'mer': {
         'welcome': "🐷🐔 Urova BalancedBora Gruwe-Kuku!\n\nNtathimana irio theru ya nguruwe kana ngûkû.",
@@ -227,8 +230,8 @@ MESSAGES = {
         'choose_species': "Hatua 1: Thagua kiama:\n\n1️⃣ Nguruwe (Gruwe)\n2️⃣ Ngûkû\n\nCokeria na 1 kana 2.",
         'choose_pig': "Hatua 2: Thagua nguruwe:\n\n1️⃣ Kîhîî (10-20kg)\n2️⃣ Mûnene (20-50kg)\n3️⃣ Mûthî (50-100kg)\n4️⃣ Tumbili Mûkûrû\n5️⃣ Tumbili Kûnyonithia\n\nCokeria na 1-5.",
         'choose_chicken': "Hatua 2: Thagua ngûkû:\n\n1️⃣ Broiler Kîhîî (0-3 wiki)\n2️⃣ Broiler Mûnene (3-6 wiki)\n3️⃣ Broiler Mûthî (6-8 wiki)\n4️⃣ Layer Kîhîî (0-6 wiki)\n5️⃣ Layer Mûnene (6-18 wiki)\n6️⃣ Layer Mûkûrû (18+ wiki)\n\nCokeria na 1-6.",
-        'feed_selection_pig': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,5,7,9):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Muhogo (KES 18/kg)\n5️⃣ Majani ma Viazi (KES 5/kg)\n\nPROTEINI:\n6️⃣ Mlo wa Soya (KES 75/kg)\n7️⃣ Keki ya Alizeti (KES 55/kg)\n8️⃣ Keki ya Pamba (KES 60/kg)\n9️⃣ Mlo wa Thamaki (KES 120/kg)\n🔟 Makapi ma Bia (KES 15/kg)\n\nMAJANI:\n11️⃣ Majani ma Lucerne (KES 35/kg)\n12️⃣ Majani ma Nyasi (KES 10/kg)\n\nVITAMINI/MADINI:\n13️⃣ Mawe ma Chokaa (KES 15/kg)\n14️⃣ Dicalcium Phosphate (KES 80/kg)\n15️⃣ Premix (KES 150/kg)\n16️⃣ Chumvi (KES 20/kg)\n17️⃣ Lysine (KES 200/kg)",
-        'feed_selection_chicken': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,6,13,15):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Sorghum (KES 28/kg)\n5️⃣ Muhogo (KES 18/kg)\n\nPROTEINI:\n6️⃣ Mlo wa Soya (KES 75/kg)\n7️⃣ Keki ya Alizeti (KES 55/kg)\n8️⃣ Keki ya Pamba (KES 60/kg)\n9️⃣ Mlo wa Thamaki (KES 120/kg)\n🔟 Mlo wa Rûtî (KES 100/kg)\n\nMADINI/VITAMINI:\n11️⃣ Mawe ma Chokaa (KES 15/kg)\n12️⃣ Dicalcium Phosphate (KES 80/kg)\n13️⃣ Oyster Shell — Layers (KES 25/kg)\n14️⃣ Premix (KES 150/kg)\n15️⃣ Chumvi (KES 20/kg)\n16️⃣ Methionine (KES 250/kg)\n17️⃣ Lysine (KES 200/kg)",
+        'feed_selection_pig': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,5,7,9):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Mtama (KES 28/kg)\n5️⃣ Muhogo (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEINI:\n8️⃣ Mlo wa Soya (KES 75/kg)\n9️⃣ Keki ya Alizeti (KES 55/kg)\n🔟 Keki ya Pamba (KES 60/kg)\n11️⃣ Mlo wa Thamaki (KES 120/kg)\n12️⃣ Makapi ma Bia (KES 15/kg)\n13️⃣ Keki ya Karanga (KES 65/kg)\n14️⃣ Keki ya Simsim (KES 58/kg)\n\nVITAMINI/MADINI:\n15️⃣ Mawe ma Chokaa (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Premix (KES 150/kg)\n18️⃣ Chumvi (KES 20/kg)\n19️⃣ Lysine (KES 200/kg)",
+        'feed_selection_chicken': "Hatua 3: Thagua irio ûrî na rîo.\nTûma namba ikîmenyekanithio na koma (kûranî, 1,3,8,15,17):\n\nHOTI:\n1️⃣ Mûbî (KES 30/kg)\n2️⃣ Makapi ma Ngano (KES 20/kg)\n3️⃣ Makapi ma Mûchele (KES 22/kg)\n4️⃣ Mtama (KES 28/kg)\n5️⃣ Muhogo (KES 18/kg)\n6️⃣ Barley (KES 26/kg)\n7️⃣ Maize Germ (KES 24/kg)\n\nPROTEINI:\n8️⃣ Mlo wa Soya (KES 75/kg)\n9️⃣ Keki ya Alizeti (KES 55/kg)\n🔟 Keki ya Pamba (KES 60/kg)\n11️⃣ Mlo wa Thamaki (KES 120/kg)\n12️⃣ Mlo wa Rûtî (KES 100/kg)\n13️⃣ Keki ya Karanga (KES 65/kg)\n14️⃣ Keki ya Simsim (KES 58/kg)\n\nMADINI/VITAMINI:\n15️⃣ Mawe ma Chokaa (KES 15/kg)\n16️⃣ Dicalcium Phosphate (KES 80/kg)\n17️⃣ Oyster Shell — Layers (KES 25/kg)\n18️⃣ Premix (KES 150/kg)\n19️⃣ Chumvi (KES 20/kg)\n20️⃣ Methionine (KES 250/kg)\n21️⃣ Lysine (KES 200/kg)",
         'ration_optimal': "✅ Irio Rîaku Rîtheru (NRC)",
         'ration_besteffort': "✅ Irio Rîaku Rîtheru Zaidi (Kûgîa Gûtîrî)",
         'profile_label': "🐷🐔",
@@ -243,10 +246,10 @@ MESSAGES = {
         'nutrient_low': "⚠️ {nutrient}: {actual} (gûtîrî {min}-{max}) — CHINI hûgûrû",
         'nutrient_high': "⚠️ {nutrient}: {actual} (gûtîrî {min}-{max}) — JUU hûgûrû",
         'ai_suggestions': "🤖 Kûboresha thutha wa gûku, geria kuongeza:",
-        'no_energy_error': "❌ Tafadhali ongera chanzo cha hoti (#1-5).",
+        'no_energy_error': "❌ Tafadhali ongera chanzo cha hoti (#1-7).",
         'impossible_mins': "❌ HAIWEZEKANI: Irio lazima cûkue {total_min}%.\nArîa mekosea: {offenders}",
         'unknown_feeds': "❌ Irio itarîmenyekana: {feeds}",
-        'select_at_least_2': "Tafadhali thagua angalau irio 2.\nTuma namba ta 1,3,6,13,15",
+        'select_at_least_2': "Tafadhali thagua angalau irio 2.\nTuma namba ta 1,3,8,15,17",
         'invalid_choice': "Tafadhali tuma namba sahihi.",
         'photo_detected': "📸 Nîmona: {feeds}\n\nCokeria II.",
         'photo_not_found': "📸 Nîndîratambua irio kûranî rûtûni.",
@@ -263,17 +266,18 @@ MESSAGES = {
         'supplier_na': "📦 Taarifa ya mûgûrî bado ti îkî. Ongeza mawasiliano ya agrovet yaku.",
         'recommendations_header': "📋 MAENDELEZO KWA IRIO RÎAKU:",
         'rec_energy': "⚡ Wîna bata ciana cia HOTI (k.m. Mûbî #1, Makapi ma Ngano #2) kwa ukuaji na ûhooro wa mwîrî.",
-        'rec_protein': "🥜 Wîna bata ciana cia PROTEINI (k.m. Mlo wa Soya #6, Mlo wa Thamaki #9) kwa misuli.",
-        'rec_mineral': "🦴 Wîna bata MADINI (k.m. Mawe ma Chokaa #11, DCP #12, Premix #14, Chumvi #15) kwa mifupa.",
-        'rec_calcium_layer': "🥚 LAYERS nî bata CALCIUM ingî (Oyster Shell #13 kana Mawe ma Chokaa #11) kwa mayai matheru.",
-        'rec_lysine_pig': "🧬 Nguruwe nî bata LYSINE (#17) kwa ukuaji wa haraka.",
-        'rec_methionine_broiler': "🧬 Broilers nî bata METHIONINE (#16) kwa manyoya na misuli.",
-        'rec_salt': "🧂 Ongera CHUMVI (#15) — muhimu kwa nyamû o yothe.",
-        'rec_premix': "💊 Ongera PREMIX (#14) — ina vitamini na madini.",
+        'rec_protein': "🥜 Wîna bata ciana cia PROTEINI (k.m. Mlo wa Soya #8, Mlo wa Thamaki #11) kwa misuli.",
+        'rec_mineral': "🦴 Wîna bata MADINI (k.m. Mawe ma Chokaa #15, DCP #16, Premix #18, Chumvi #19) kwa mifupa.",
+        'rec_calcium_layer': "🥚 LAYERS nî bata CALCIUM ingî (Oyster Shell #17 kana Mawe ma Chokaa #15) kwa mayai matheru.",
+        'rec_lysine_pig': "🧬 Nguruwe nî bata LYSINE (#19) kwa ukuaji wa haraka.",
+        'rec_methionine_broiler': "🧬 Broilers nî bata METHIONINE (#20) kwa manyoya na misuli.",
+        'rec_salt': "🧂 Ongera CHUMVI (#19) — muhimu kwa nyamû o yothe.",
+        'rec_premix': "💊 Ongera PREMIX (#18) — ina vitamini na madini.",
         'current_selection': "Wîrî na rîo: {feeds}",
         'ask_confirm_recs': "Cokeria II kûhûthia na irio icio + maendekezo makwa, kana tûma namba ingî cia irio.",
         'ask_more_feeds': "Wîna bata irio 2 (1 hoti + 1 proteini). Tafadhali tûma namba ingî cia irio.",
         'memory_greeting': "👋 Wî mwega! Mûthenya wa gûkû ûrathîrîririe irio rîtheru kwa {profile} ukitumia {feeds}.\n\nTuma START kûgîa rîngî, kana ûgîe ûrî na gûtûmîra.",
+        'calc_error': "❌ Hesabu yagire: {error}\n\nTuma START kûgîa rîngî, kana ongera irio ingî.",
     }
 }
 
@@ -288,24 +292,25 @@ def get_msg(phone, key, **kwargs):
     return text
 
 # ============================================================
-# NUMBER -> FEED ID MAPPING (21 feeds)
+# NUMBER -> FEED ID MAPPING (22 feeds — unified, no forages)
 # ============================================================
 FEED_NUMBER_MAP = {
     '1': 'maize_grain', '2': 'wheat_bran', '3': 'rice_bran',
     '4': 'sorghum', '5': 'cassava_chips',
-    '6': 'soybean_meal', '7': 'sunflower_cake', '8': 'cottonseed_cake',
-    '9': 'fish_meal', '10': 'blood_meal',
-    '11': 'limestone', '12': 'dicalcium_phosphate',
-    '13': 'oyster_shell', '14': 'vitamin_mineral_premix',
-    '15': 'salt', '16': 'methionine', '17': 'lysine',
-    '18': 'sweet_potato_vines', '19': 'lucerne_hay', '20': 'grass_hay',
-    '21': 'brewers_grains',
+    '6': 'barley', '7': 'maize_germ',
+    '8': 'soybean_meal', '9': 'sunflower_cake', '10': 'cottonseed_cake',
+    '11': 'fish_meal', '12': 'brewers_grains',
+    '13': 'groundnut_cake', '14': 'sesame_cake',
+    '15': 'limestone', '16': 'dicalcium_phosphate',
+    '17': 'oyster_shell', '18': 'vitamin_mineral_premix',
+    '19': 'salt', '20': 'methionine', '21': 'lysine',
+    '22': 'blood_meal',
 }
 
 ID_TO_NUMBER = {v: k for k, v in FEED_NUMBER_MAP.items()}
 
 # ============================================================
-# COMPLETE FEED DATABASE
+# COMPLETE FEED DATABASE (forages removed, 4 new ingredients)
 # ============================================================
 FEEDS_DB = {
     'maize_grain': {
@@ -333,6 +338,16 @@ FEEDS_DB = {
         'cf': 4.0, 'fat': 0.5, 'ash': 2.5, 'cost_kg': 18, 'min_incl': 0, 'max_incl': 20,
         'category': 'energy', 'notes': 'High starch, must be dried (HCN risk)'
     },
+    'barley': {
+        'name': 'Barley', 'cp': 11.0, 'me': 3.05, 'lysine': 0.40, 'ca': 0.05, 'p': 0.35,
+        'cf': 5.0, 'fat': 2.0, 'ash': 2.5, 'cost_kg': 26, 'min_incl': 0, 'max_incl': 35,
+        'category': 'energy', 'notes': 'Good energy source, moderate protein'
+    },
+    'maize_germ': {
+        'name': 'Maize Germ', 'cp': 10.0, 'me': 3.10, 'lysine': 0.35, 'ca': 0.04, 'p': 0.60,
+        'cf': 6.0, 'fat': 10.0, 'ash': 3.0, 'cost_kg': 24, 'min_incl': 0, 'max_incl': 20,
+        'category': 'energy', 'notes': 'High fat energy source from maize milling'
+    },
     'soybean_meal': {
         'name': 'Soybean Meal', 'cp': 48.0, 'me': 3.20, 'lysine': 2.90, 'ca': 0.35, 'p': 0.70,
         'cf': 6.0, 'fat': 2.0, 'ash': 6.5, 'cost_kg': 75, 'min_incl': 5, 'max_incl': 35,
@@ -353,10 +368,20 @@ FEEDS_DB = {
         'cf': 1.0, 'fat': 8.0, 'ash': 18.0, 'cost_kg': 120, 'min_incl': 0, 'max_incl': 8,
         'category': 'protein', 'notes': 'Very high protein, excellent amino acid profile'
     },
-    'blood_meal': {
-        'name': 'Blood Meal', 'cp': 85.0, 'me': 2.50, 'lysine': 7.50, 'ca': 0.30, 'p': 0.25,
-        'cf': 1.0, 'fat': 1.0, 'ash': 5.0, 'cost_kg': 100, 'min_incl': 0, 'max_incl': 4,
-        'category': 'protein', 'notes': 'Very high lysine, low calcium'
+    'brewers_grains': {
+        'name': 'Brewers Grains', 'cp': 25.0, 'me': 2.10, 'lysine': 0.80, 'ca': 0.35, 'p': 0.55,
+        'cf': 18.0, 'fat': 6.0, 'ash': 4.0, 'cost_kg': 15, 'min_incl': 0, 'max_incl': 15,
+        'category': 'protein', 'notes': 'Moderate protein, high fiber'
+    },
+    'groundnut_cake': {
+        'name': 'Groundnut Cake', 'cp': 42.0, 'me': 2.60, 'lysine': 1.40, 'ca': 0.15, 'p': 0.55,
+        'cf': 12.0, 'fat': 7.0, 'ash': 5.0, 'cost_kg': 65, 'min_incl': 0, 'max_incl': 20,
+        'category': 'protein', 'notes': 'Good protein, moderate lysine, aflatoxin risk if moldy'
+    },
+    'sesame_cake': {
+        'name': 'Sesame Cake', 'cp': 38.0, 'me': 2.40, 'lysine': 1.10, 'ca': 2.20, 'p': 1.20,
+        'cf': 10.0, 'fat': 10.0, 'ash': 8.0, 'cost_kg': 58, 'min_incl': 0, 'max_incl': 15,
+        'category': 'protein', 'notes': 'High calcium, moderate protein, good for layers'
     },
     'limestone': {
         'name': 'Limestone', 'cp': 0.0, 'me': 0.0, 'lysine': 0.0, 'ca': 38.0, 'p': 0.0,
@@ -393,25 +418,10 @@ FEEDS_DB = {
         'cf': 0.0, 'fat': 0.0, 'ash': 0.0, 'cost_kg': 200, 'min_incl': 0, 'max_incl': 0.5,
         'category': 'additive', 'notes': 'Essential amino acid for pigs and poultry'
     },
-    'sweet_potato_vines': {
-        'name': 'Sweet Potato Vines', 'cp': 12.0, 'me': 1.80, 'lysine': 0.40, 'ca': 0.80, 'p': 0.25,
-        'cf': 18.0, 'fat': 2.0, 'ash': 10.0, 'cost_kg': 5, 'min_incl': 0, 'max_incl': 20,
-        'category': 'forage', 'notes': 'Green forage for pigs, moderate protein'
-    },
-    'lucerne_hay': {
-        'name': 'Lucerne Hay', 'cp': 18.0, 'me': 1.80, 'lysine': 0.70, 'ca': 1.40, 'p': 0.25,
-        'cf': 28.0, 'fat': 2.5, 'ash': 10.0, 'cost_kg': 35, 'min_incl': 0, 'max_incl': 15,
-        'category': 'forage', 'notes': 'High protein forage'
-    },
-    'grass_hay': {
-        'name': 'Grass Hay', 'cp': 7.0, 'me': 1.50, 'lysine': 0.20, 'ca': 0.35, 'p': 0.25,
-        'cf': 32.0, 'fat': 2.0, 'ash': 8.0, 'cost_kg': 10, 'min_incl': 0, 'max_incl': 20,
-        'category': 'forage', 'notes': 'Standard roughage'
-    },
-    'brewers_grains': {
-        'name': 'Brewers Grains', 'cp': 25.0, 'me': 2.10, 'lysine': 0.80, 'ca': 0.35, 'p': 0.55,
-        'cf': 18.0, 'fat': 6.0, 'ash': 4.0, 'cost_kg': 15, 'min_incl': 0, 'max_incl': 15,
-        'category': 'protein', 'notes': 'Moderate protein, high fiber'
+    'blood_meal': {
+        'name': 'Blood Meal', 'cp': 85.0, 'me': 2.50, 'lysine': 7.50, 'ca': 0.30, 'p': 0.25,
+        'cf': 1.0, 'fat': 1.0, 'ash': 5.0, 'cost_kg': 100, 'min_incl': 0, 'max_incl': 4,
+        'category': 'protein', 'notes': 'Very high lysine, low calcium'
     },
 }
 
@@ -548,7 +558,7 @@ def analyze_feed_gaps(profile_key, selected_feed_ids):
     categories = {f['category'] for f in available.values()}
 
     # Check energy
-    if 'energy' not in categories and 'forage' not in categories:
+    if 'energy' not in categories:
         recs.append('rec_energy')
 
     # Check protein
@@ -673,131 +683,138 @@ class FeedSuggestionEngine:
 suggestion_engine = FeedSuggestionEngine(FEEDS_DB, ALL_PROFILES)
 
 # ============================================================
-# MAIN SOLVER — STRICT + BEST-EFFORT
+# MAIN SOLVER — STRICT + BEST-EFFORT with robust error handling
 # ============================================================
 def solve_ration(profile_key, selected_feeds):
-    if profile_key not in ALL_PROFILES:
-        return None, f"Invalid profile: {profile_key}"
-    profile = ALL_PROFILES[profile_key]
-    available = {fid: FEEDS_DB[fid] for fid in selected_feeds if fid in FEEDS_DB}
-    invalid = [fid for fid in selected_feeds if fid not in FEEDS_DB]
-    if invalid:
-        return None, f"Unknown feeds: {', '.join(invalid)}"
-    if len(available) < 2:
-        return None, "Please select at least 2 feeds."
-    energy_count = sum(1 for f in available.values() if f['category'] == 'energy')
-    if energy_count == 0:
-        return None, "NO_ENERGY"
-    total_min = sum(FEEDS_DB[fid]['min_incl'] for fid in selected_feeds if fid in FEEDS_DB)
-    if total_min > 100:
-        offenders = [FEEDS_DB[fid]['name'] + f" (min {FEEDS_DB[fid]['min_incl']}%)"
-                     for fid in selected_feeds if fid in FEEDS_DB and FEEDS_DB[fid]['min_incl'] > 0]
-        return None, ("IMPOSSIBLE_MINS", total_min, offenders)
+    try:
+        if profile_key not in ALL_PROFILES:
+            return None, f"Invalid profile: {profile_key}"
+        profile = ALL_PROFILES[profile_key]
+        available = {fid: FEEDS_DB[fid] for fid in selected_feeds if fid in FEEDS_DB}
+        invalid = [fid for fid in selected_feeds if fid not in FEEDS_DB]
+        if invalid:
+            return None, f"Unknown feeds: {', '.join(invalid)}"
+        if len(available) < 2:
+            return None, "Please select at least 2 feeds."
+        energy_count = sum(1 for f in available.values() if f['category'] == 'energy')
+        if energy_count == 0:
+            return None, "NO_ENERGY"
+        total_min = sum(FEEDS_DB[fid]['min_incl'] for fid in selected_feeds if fid in FEEDS_DB)
+        if total_min > 100:
+            offenders = [FEEDS_DB[fid]['name'] + f" (min {FEEDS_DB[fid]['min_incl']}%)"
+                         for fid in selected_feeds if fid in FEEDS_DB and FEEDS_DB[fid]['min_incl'] > 0]
+            return None, ("IMPOSSIBLE_MINS", total_min, offenders)
 
-    nutrients = ['cp', 'me', 'lysine', 'ca', 'p', 'cf', 'fat', 'ash']
-    prob = pulp.LpProblem(f"Ration_{profile_key}", pulp.LpMinimize)
-    feed_vars = pulp.LpVariable.dicts("Feed", available.keys(), lowBound=0, upBound=100)
-    prob += pulp.lpSum([feed_vars[fid] * available[fid]['cost_kg'] for fid in available])
-    prob += pulp.lpSum([feed_vars[fid] for fid in available]) == 100
-    for nutrient in nutrients:
-        if nutrient in profile:
-            req = profile[nutrient]
-            prob += pulp.lpSum([feed_vars[fid] * available[fid][nutrient] for fid in available]) >= req['min'] * 100
-            prob += pulp.lpSum([feed_vars[fid] * available[fid][nutrient] for fid in available]) <= req['max'] * 100
-    for fid, data in available.items():
-        prob += feed_vars[fid] >= data['min_incl']
-        prob += feed_vars[fid] <= data['max_incl']
-    prob.solve(pulp.PULP_CBC_CMD(msg=0))
-    strict_optimal = (pulp.LpStatus[prob.status] == 'Optimal')
-
-    if not strict_optimal:
-        prob2 = pulp.LpProblem(f"Ration_{profile_key}_besteffort", pulp.LpMinimize)
-        feed_vars2 = pulp.LpVariable.dicts("FeedBE", available.keys(), lowBound=0, upBound=100)
-        slack_under = {}; slack_over = {}
-        for nutrient in nutrients:
-            if nutrient in profile:
-                slack_under[nutrient] = pulp.LpVariable(f"under_{nutrient}", lowBound=0)
-                slack_over[nutrient] = pulp.LpVariable(f"over_{nutrient}", lowBound=0)
-        objective = pulp.lpSum([100000 * slack_under[n] + 100000 * slack_over[n] for n in slack_under])
-        objective += pulp.lpSum([feed_vars2[fid] * available[fid]['cost_kg'] for fid in available])
-        prob2 += objective
-        prob2 += pulp.lpSum([feed_vars2[fid] for fid in available]) == 100
-        for fid, data in available.items():
-            prob2 += feed_vars2[fid] >= data['min_incl']
-            prob2 += feed_vars2[fid] <= data['max_incl']
+        nutrients = ['cp', 'me', 'lysine', 'ca', 'p', 'cf', 'fat', 'ash']
+        prob = pulp.LpProblem(f"Ration_{profile_key}", pulp.LpMinimize)
+        feed_vars = pulp.LpVariable.dicts("Feed", available.keys(), lowBound=0, upBound=100)
+        prob += pulp.lpSum([feed_vars[fid] * available[fid]['cost_kg'] for fid in available])
+        prob += pulp.lpSum([feed_vars[fid] for fid in available]) == 100
         for nutrient in nutrients:
             if nutrient in profile:
                 req = profile[nutrient]
-                prob2 += pulp.lpSum([feed_vars2[fid] * available[fid][nutrient] for fid in available]) + slack_under[nutrient] * 100 >= req['min'] * 100
-                prob2 += pulp.lpSum([feed_vars2[fid] * available[fid][nutrient] for fid in available]) - slack_over[nutrient] * 100 <= req['max'] * 100
-        prob2.solve(pulp.PULP_CBC_CMD(msg=0))
-        feed_vars = feed_vars2
-        best_effort = True
-    else:
+                prob += pulp.lpSum([feed_vars[fid] * available[fid][nutrient] for fid in available]) >= req['min'] * 100
+                prob += pulp.lpSum([feed_vars[fid] * available[fid][nutrient] for fid in available]) <= req['max'] * 100
+        for fid, data in available.items():
+            prob += feed_vars[fid] >= data['min_incl']
+            prob += feed_vars[fid] <= data['max_incl']
+        prob.solve(pulp.PULP_CBC_CMD(msg=0))
+        strict_optimal = (pulp.LpStatus[prob.status] == 'Optimal')
+
         best_effort = False
+        if not strict_optimal:
+            prob2 = pulp.LpProblem(f"Ration_{profile_key}_besteffort", pulp.LpMinimize)
+            feed_vars2 = pulp.LpVariable.dicts("FeedBE", available.keys(), lowBound=0, upBound=100)
+            slack_under = {}; slack_over = {}
+            for nutrient in nutrients:
+                if nutrient in profile:
+                    slack_under[nutrient] = pulp.LpVariable(f"under_{nutrient}", lowBound=0)
+                    slack_over[nutrient] = pulp.LpVariable(f"over_{nutrient}", lowBound=0)
+            objective = pulp.lpSum([100000 * slack_under[n] + 100000 * slack_over[n] for n in slack_under])
+            objective += pulp.lpSum([feed_vars2[fid] * available[fid]['cost_kg'] for fid in available])
+            prob2 += objective
+            prob2 += pulp.lpSum([feed_vars2[fid] for fid in available]) == 100
+            for fid, data in available.items():
+                prob2 += feed_vars2[fid] >= data['min_incl']
+                prob2 += feed_vars2[fid] <= data['max_incl']
+            for nutrient in nutrients:
+                if nutrient in profile:
+                    req = profile[nutrient]
+                    prob2 += pulp.lpSum([feed_vars2[fid] * available[fid][nutrient] for fid in available]) + slack_under[nutrient] * 100 >= req['min'] * 100
+                    prob2 += pulp.lpSum([feed_vars2[fid] * available[fid][nutrient] for fid in available]) - slack_over[nutrient] * 100 <= req['max'] * 100
+            prob2.solve(pulp.PULP_CBC_CMD(msg=0))
 
-    ration = []
-    total_cost = 0
-    total_nutrients = {n: 0 for n in nutrients}
-    for fid in available:
-        qty = feed_vars[fid].varValue
-        if qty and qty > 0.05:
-            cost = qty * available[fid]['cost_kg']
-            total_cost += cost
-            ration.append({
-                'id': fid, 'name': available[fid]['name'],
-                'percentage': qty,
-                'kg_per_day': qty / 100 * profile['dmi'],
-                'cost_per_day': cost / 100 * profile['dmi'],
-                'category': available[fid]['category'],
-            })
-            for n in nutrients:
-                total_nutrients[n] += qty * available[fid][n]
-    for n in total_nutrients:
-        total_nutrients[n] /= 100
+            # Check if best-effort also failed
+            if pulp.LpStatus[prob2.status] != 'Optimal':
+                return None, f"Solver could not find a feasible mix. Status: {pulp.LpStatus[prob2.status]}. Try adding more diverse feeds (energy + protein + minerals)."
 
-    verification = {}
-    low_nutrients = []; high_nutrients = []; all_ok = True
-    for n in nutrients:
-        if n in profile:
-            actual = total_nutrients[n]
-            req = profile[n]
-            in_range = req['min'] <= actual <= req['max']
-            if not in_range:
-                all_ok = False
-                if actual < req['min']: low_nutrients.append(n)
-                else: high_nutrients.append(n)
-            verification[n] = {
-                'actual': actual, 'min': req['min'], 'max': req['max'],
-                'status': '✅' if in_range else '⚠️',
-                'unit': '%' if n != 'me' else 'Mcal/kg'
-            }
+            feed_vars = feed_vars2
+            best_effort = True
 
-    warnings = []
-    if best_effort:
-        warnings.append(('best_effort_notice', {}))
-        for n in low_nutrients:
-            v = verification[n]
-            warnings.append(('nutrient_low', {'nutrient': n.upper(), 'actual': f"{v['actual']:.1f}{v['unit']}", 'min': f"{v['min']:.1f}", 'max': f"{v['max']:.1f}"}))
-        for n in high_nutrients:
-            v = verification[n]
-            warnings.append(('nutrient_high', {'nutrient': n.upper(), 'actual': f"{v['actual']:.1f}{v['unit']}", 'min': f"{v['min']:.1f}", 'max': f"{v['max']:.1f}"}))
-        ai_sugs = suggestion_engine.suggest_for_fix(profile_key, selected_feeds, low_nutrients, high_nutrients)
-        if ai_sugs:
-            warnings.append(('ai_suggestions', {}))
-            for i, sug in enumerate(ai_sugs, 1):
-                num = ID_TO_NUMBER.get(sug['id'], '?')
-                reasons = ", ".join(sug['reasons']) if sug['reasons'] else "balanced"
-                warnings.append(('ai_item', {'i': i, 'num': num, 'name': sug['name'], 'cost': sug['cost'], 'reasons': reasons}))
+        ration = []
+        total_cost = 0
+        total_nutrients = {n: 0 for n in nutrients}
+        for fid in available:
+            qty = feed_vars[fid].varValue
+            if qty and qty > 0.05:
+                cost = qty * available[fid]['cost_kg']
+                total_cost += cost
+                ration.append({
+                    'id': fid, 'name': available[fid]['name'],
+                    'percentage': qty,
+                    'kg_per_day': qty / 100 * profile['dmi'],
+                    'cost_per_day': cost / 100 * profile['dmi'],
+                    'category': available[fid]['category'],
+                })
+                for n in nutrients:
+                    total_nutrients[n] += qty * available[fid][n]
+        for n in total_nutrients:
+            total_nutrients[n] /= 100
 
-    result = {
-        'profile': profile['name'], 'dmi': profile['dmi'],
-        'total_cost_per_day': total_cost / 100 * profile['dmi'],
-        'cost_per_kg_dm': total_cost / 100,
-        'ration': ration, 'verification': verification,
-        'best_effort': best_effort, 'warnings': warnings
-    }
-    return result, None
+        verification = {}
+        low_nutrients = []; high_nutrients = []; all_ok = True
+        for n in nutrients:
+            if n in profile:
+                actual = total_nutrients[n]
+                req = profile[n]
+                in_range = req['min'] <= actual <= req['max']
+                if not in_range:
+                    all_ok = False
+                    if actual < req['min']: low_nutrients.append(n)
+                    else: high_nutrients.append(n)
+                verification[n] = {
+                    'actual': actual, 'min': req['min'], 'max': req['max'],
+                    'status': '✅' if in_range else '⚠️',
+                    'unit': '%' if n != 'me' else 'Mcal/kg'
+                }
+
+        warnings = []
+        if best_effort:
+            warnings.append(('best_effort_notice', {}))
+            for n in low_nutrients:
+                v = verification[n]
+                warnings.append(('nutrient_low', {'nutrient': n.upper(), 'actual': f"{v['actual']:.1f}{v['unit']}", 'min': f"{v['min']:.1f}", 'max': f"{v['max']:.1f}"}))
+            for n in high_nutrients:
+                v = verification[n]
+                warnings.append(('nutrient_high', {'nutrient': n.upper(), 'actual': f"{v['actual']:.1f}{v['unit']}", 'min': f"{v['min']:.1f}", 'max': f"{v['max']:.1f}"}))
+            ai_sugs = suggestion_engine.suggest_for_fix(profile_key, selected_feeds, low_nutrients, high_nutrients)
+            if ai_sugs:
+                warnings.append(('ai_suggestions', {}))
+                for i, sug in enumerate(ai_sugs, 1):
+                    num = ID_TO_NUMBER.get(sug['id'], '?')
+                    reasons = ", ".join(sug['reasons']) if sug['reasons'] else "balanced"
+                    warnings.append(('ai_item', {'i': i, 'num': num, 'name': sug['name'], 'cost': sug['cost'], 'reasons': reasons}))
+
+        result = {
+            'profile': profile['name'], 'dmi': profile['dmi'],
+            'total_cost_per_day': total_cost / 100 * profile['dmi'],
+            'cost_per_kg_dm': total_cost / 100,
+            'ration': ration, 'verification': verification,
+            'best_effort': best_effort, 'warnings': warnings
+        }
+        return result, None
+    except Exception as e:
+        return None, f"Solver error: {str(e)}"
 
 @lru_cache(maxsize=256)
 def cached_solve_ration(profile_key: str, selected_feeds_tuple: tuple):
@@ -810,15 +827,17 @@ FEED_LABELS = {
     'maize': '1', 'corn': '1', 'grain': '1', 'cereal': '1', 'yellow': '1',
     'wheat': '2', 'bran': '2', 'rice': '3', 'sorghum': '4', 'milo': '4',
     'cassava': '5', 'manioc': '5', 'yam': '5',
-    'soybean': '6', 'soya': '6', 'sunflower': '7', 'cotton': '8', 'seed': '8',
-    'fish': '9', 'meal': '9', 'blood': '10', 'bone': '10',
-    'limestone': '11', 'chalk': '11', 'white': '11', 'powder': '11',
-    'phosphate': '12', 'dcp': '12', 'oyster': '13', 'shell': '13',
-    'premix': '14', 'vitamin': '14', 'mineral': '14', 'salt': '15',
-    'methionine': '16', 'lysine': '17', 'amino': '17',
-    'potato': '18', 'vine': '18', 'green': '18', 'leaf': '18',
-    'lucerne': '19', 'alfalfa': '19', 'grass': '20', 'hay': '20', 'fodder': '20',
-    'brewer': '21', 'beer': '21', 'malt': '21',
+    'barley': '6', 'malt': '6',
+    'germ': '7', 'maize germ': '7',
+    'soybean': '8', 'soya': '8', 'sunflower': '9', 'cotton': '10', 'seed': '10',
+    'fish': '11', 'meal': '11', 'brewer': '12', 'beer': '12', 'malt': '12',
+    'groundnut': '13', 'peanut': '13', 'karanga': '13',
+    'sesame': '14', 'simsim': '14',
+    'limestone': '15', 'chalk': '15', 'white': '15', 'powder': '15',
+    'phosphate': '16', 'dcp': '16', 'oyster': '17', 'shell': '17',
+    'premix': '18', 'vitamin': '18', 'mineral': '18', 'salt': '19',
+    'methionine': '20', 'lysine': '21', 'amino': '21',
+    'blood': '22', 'bone': '22',
 }
 
 def detect_feeds_from_image(image_url):
@@ -893,35 +912,46 @@ def format_suppliers(phone, feed_ids):
 
 
 # ============================================================
-# BACKGROUND TASK
+# BACKGROUND TASK — with guaranteed error reply
 # ============================================================
 def process_ration_and_reply(phone: str, profile_key: str, feed_ids: list, lang: str, species: str):
-    start = time.time()
-    if phone not in user_sessions:
-        user_sessions[phone] = {}
-    user_sessions[phone]['lang'] = lang
-    result, error = cached_solve_ration(profile_key, tuple(sorted(feed_ids)))
-    solve_time = (time.time() - start) * 1000
-    print(f"[BG TASK] Solved ration for {phone} in {solve_time:.0f}ms")
+    try:
+        start = time.time()
+        if phone not in user_sessions:
+            user_sessions[phone] = {}
+        user_sessions[phone]['lang'] = lang
+        result, error = cached_solve_ration(profile_key, tuple(sorted(feed_ids)))
+        solve_time = (time.time() - start) * 1000
+        print(f"[BG TASK] Solved ration for {phone} in {solve_time:.0f}ms")
 
-    if error and isinstance(error, str) and error.startswith("❌"):
-        reply_text = error
-    elif error == "NO_ENERGY":
-        reply_text = get_msg(phone, 'no_energy_error')
-    elif error and isinstance(error, tuple) and error[0] == "IMPOSSIBLE_MINS":
-        reply_text = get_msg(phone, 'impossible_mins', total_min=error[1], offenders=', '.join(error[2]))
-    else:
-        reply_text = format_ration(phone, result, species)
-        reply_text += format_suppliers(phone, feed_ids)
+        if error and isinstance(error, str) and error.startswith("❌"):
+            reply_text = error
+        elif error == "NO_ENERGY":
+            reply_text = get_msg(phone, 'no_energy_error')
+        elif error and isinstance(error, tuple) and error[0] == "IMPOSSIBLE_MINS":
+            reply_text = get_msg(phone, 'impossible_mins', total_min=error[1], offenders=', '.join(error[2]))
+        elif error:
+            reply_text = get_msg(phone, 'calc_error', error=str(error))
+        else:
+            reply_text = format_ration(phone, result, species)
+            reply_text += format_suppliers(phone, feed_ids)
 
-    if client:
+        if client:
+            try:
+                client.messages.create(from_=TWILIO_NUMBER, body=reply_text, to=f"whatsapp:{phone}")
+                print(f"[BG TASK] Result sent to {phone}")
+            except Exception as e:
+                print(f"[BG TASK] FAILED to send to {phone}: {e}")
+        else:
+            print(f"[BG TASK] No Twilio client, cannot send to {phone}")
+    except Exception as e:
+        print(f"[BG TASK] CRITICAL ERROR for {phone}: {e}")
         try:
-            client.messages.create(from_=TWILIO_NUMBER, body=reply_text, to=f"whatsapp:{phone}")
-            print(f"[BG TASK] Result sent to {phone}")
-        except Exception as e:
-            print(f"[BG TASK] FAILED to send to {phone}: {e}")
-    else:
-        print(f"[BG TASK] No Twilio client, cannot send to {phone}")
+            if client:
+                error_msg = get_msg(phone, 'calc_error', error=str(e))
+                client.messages.create(from_=TWILIO_NUMBER, body=error_msg, to=f"whatsapp:{phone}")
+        except:
+            pass
 
 # ============================================================
 # GEMINI NATURAL LANGUAGE UNDERSTANDING
@@ -932,22 +962,23 @@ FEED_NAME_TO_NUMBER = {
     'rice_bran': '3', 'makapi_ya_mchele': '3', 'mchel': '3', 'mchele': '3', 'rice': '3',
     'sorghum': '4', 'mtama': '4',
     'cassava_chips': '5', 'muhogo': '5', 'cassava': '5', 'manioc': '5',
-    'soybean_meal': '6', 'soya': '6', 'soybean': '6', 'mlo_wa_soya': '6',
-    'sunflower_cake': '7', 'keki_ya_alizeti': '7', 'alizeti': '7', 'sunflower': '7',
-    'cottonseed_cake': '8', 'keki_ya_pamba': '8', 'pamba': '8', 'cotton': '8',
-    'fish_meal': '9', 'mlo_wa_samaki': '9', 'samaki': '9', 'mlo_wa_thamaki': '9', 'fish': '9',
-    'blood_meal': '10', 'mlo_wa_damu': '10', 'damu': '10', 'mlo_wa_rutî': '10', 'blood': '10',
-    'limestone': '11', 'mawe_ya_chokaa': '11', 'chokaa': '11', 'lime': '11',
-    'dicalcium_phosphate': '12', 'dcp': '12', 'phosphate': '12',
-    'oyster_shell': '13', 'oyster': '13', 'shell': '13',
-    'vitamin_mineral_premix': '14', 'premix': '14', 'vitamin': '14', 'mineral': '14',
-    'salt': '15', 'chumvi': '15',
-    'methionine': '16',
-    'lysine': '17',
-    'sweet_potato_vines': '18', 'majani_ya_viazi': '18', 'viazi': '18', 'vines': '18',
-    'lucerne_hay': '19', 'majani_ya_lucerne': '19', 'lucerne': '19', 'alfalfa': '19',
-    'grass_hay': '20', 'majani_ya_nyasi': '20', 'nyasi': '20', 'grass': '20', 'hay': '20',
-    'brewers_grains': '21', 'makapi_ya_bia': '21', 'bia': '21', 'brewer': '21', 'beer': '21',
+    'barley': '6',
+    'maize_germ': '7', 'germ': '7',
+    'soybean_meal': '8', 'soya': '8', 'soybean': '8', 'mlo_wa_soya': '8',
+    'sunflower_cake': '9', 'keki_ya_alizeti': '9', 'alizeti': '9', 'sunflower': '9',
+    'cottonseed_cake': '10', 'keki_ya_pamba': '10', 'pamba': '10', 'cotton': '10',
+    'fish_meal': '11', 'mlo_wa_samaki': '11', 'samaki': '11', 'mlo_wa_thamaki': '11', 'fish': '11',
+    'brewers_grains': '12', 'makapi_ya_bia': '12', 'bia': '12', 'brewer': '12', 'beer': '12',
+    'groundnut_cake': '13', 'keki_ya_karanga': '13', 'karanga': '13', 'groundnut': '13', 'peanut': '13',
+    'sesame_cake': '14', 'keki_ya_simsim': '14', 'simsim': '14', 'sesame': '14',
+    'limestone': '15', 'mawe_ya_chokaa': '15', 'chokaa': '15', 'lime': '15',
+    'dicalcium_phosphate': '16', 'dcp': '16', 'phosphate': '16',
+    'oyster_shell': '17', 'oyster': '17', 'shell': '17',
+    'vitamin_mineral_premix': '18', 'premix': '18', 'vitamin': '18', 'mineral': '18',
+    'salt': '19', 'chumvi': '19',
+    'methionine': '20',
+    'lysine': '21',
+    'blood_meal': '22', 'mlo_wa_damu': '22', 'damu': '22', 'mlo_wa_rutî': '22', 'blood': '22',
 }
 
 STAGE_MAP = {
@@ -996,13 +1027,13 @@ Current language hint: {current_lang}
 Available animals: pig (nguruwe, gruwe), chicken (kuku, nguku)
 Available pig stages: weaner, grower, finisher, gestating_sow, lactating_sow
 Available chicken stages: broiler_starter, broiler_grower, broiler_finisher, layer_starter, layer_grower, laying_hen
-Available feeds: maize, wheat_bran, rice_bran, sorghum, cassava_chips, sweet_potato_vines, soybean_meal, sunflower_cake, cottonseed_cake, fish_meal, blood_meal, brewers_grains, lucerne_hay, grass_hay, limestone, dicalcium_phosphate, oyster_shell, vitamin_mineral_premix, salt, methionine, lysine
+Available feeds: maize, wheat_bran, rice_bran, sorghum, cassava_chips, barley, maize_germ, soybean_meal, sunflower_cake, cottonseed_cake, fish_meal, brewers_grains, groundnut_cake, sesame_cake, limestone, dicalcium_phosphate, oyster_shell, vitamin_mineral_premix, salt, methionine, lysine, blood_meal
 
 CRITICAL RULES:
 - If the message ONLY contains feed names (no animal or stage), return species=null and stage=null. Do NOT guess the animal.
 - If the message contains an animal name, return the species.
 - If the message contains a stage name, return the stage.
-- Map common names: "mahindi"=maize, "nguruwe"=pig, "kuku"=chicken, "soya"=soybean_meal, "samaki"=fish_meal, "damu"=blood_meal, "chokaa"=limestone, "chumvi"=salt, "viazi"=sweet_potato_vines, "nyasi"=grass_hay, "bia"=brewers_grains
+- Map common names: "mahindi"=maize, "nguruwe"=pig, "kuku"=chicken, "soya"=soybean_meal, "samaki"=fish_meal, "damu"=blood_meal, "chokaa"=limestone, "chumvi"=salt, "bia"=brewers_grains, "karanga"=groundnut_cake, "simsim"=sesame_cake
 - If message is a greeting like "hi", "hello", "habari", intent=greeting
 - If message is clearly a menu number (1, 2, 3, etc.), confidence should be LOW (<0.5)
 - "ready" should be TRUE only if species, stage, AND at least 2 feeds are all provided
@@ -1301,19 +1332,19 @@ async def whatsapp_webhook(
             if 'rec_energy' in rec_keys:
                 rec_nums.append(('maize_grain', '1'))
             if 'rec_protein' in rec_keys:
-                rec_nums.append(('soybean_meal', '6'))
+                rec_nums.append(('soybean_meal', '8'))
             if 'rec_mineral' in rec_keys:
-                rec_nums.append(('limestone', '11'))
+                rec_nums.append(('limestone', '15'))
             if 'rec_salt' in rec_keys:
-                rec_nums.append(('salt', '15'))
+                rec_nums.append(('salt', '19'))
             if 'rec_premix' in rec_keys:
-                rec_nums.append(('vitamin_mineral_premix', '14'))
+                rec_nums.append(('vitamin_mineral_premix', '18'))
             if 'rec_calcium_layer' in rec_keys:
-                rec_nums.append(('oyster_shell', '13'))
+                rec_nums.append(('oyster_shell', '17'))
             if 'rec_lysine_pig' in rec_keys:
-                rec_nums.append(('lysine', '17'))
+                rec_nums.append(('lysine', '21'))
             if 'rec_methionine_broiler' in rec_keys:
-                rec_nums.append(('methionine', '16'))
+                rec_nums.append(('methionine', '20'))
 
             # Filter out already selected
             rec_feeds = [fid for fid, num in rec_nums if fid not in all_feeds]
@@ -1409,13 +1440,13 @@ async def whatsapp_webhook(
                 if rec_keys:
                     rec_nums = []
                     if 'rec_energy' in rec_keys: rec_nums.append(('maize_grain', '1'))
-                    if 'rec_protein' in rec_keys: rec_nums.append(('soybean_meal', '6'))
-                    if 'rec_mineral' in rec_keys: rec_nums.append(('limestone', '11'))
-                    if 'rec_salt' in rec_keys: rec_nums.append(('salt', '15'))
-                    if 'rec_premix' in rec_keys: rec_nums.append(('vitamin_mineral_premix', '14'))
-                    if 'rec_calcium_layer' in rec_keys: rec_nums.append(('oyster_shell', '13'))
-                    if 'rec_lysine_pig' in rec_keys: rec_nums.append(('lysine', '17'))
-                    if 'rec_methionine_broiler' in rec_keys: rec_nums.append(('methionine', '16'))
+                    if 'rec_protein' in rec_keys: rec_nums.append(('soybean_meal', '8'))
+                    if 'rec_mineral' in rec_keys: rec_nums.append(('limestone', '15'))
+                    if 'rec_salt' in rec_keys: rec_nums.append(('salt', '19'))
+                    if 'rec_premix' in rec_keys: rec_nums.append(('vitamin_mineral_premix', '18'))
+                    if 'rec_calcium_layer' in rec_keys: rec_nums.append(('oyster_shell', '17'))
+                    if 'rec_lysine_pig' in rec_keys: rec_nums.append(('lysine', '21'))
+                    if 'rec_methionine_broiler' in rec_keys: rec_nums.append(('methionine', '20'))
                     rec_feeds = [fid for fid, num in rec_nums if fid not in session['feeds']]
                     session['recommended_feeds'] = rec_feeds
                     rec_msg = format_recommendations(phone, session['profile'], session['feeds'])
@@ -1439,10 +1470,10 @@ async def whatsapp_webhook(
 @app.get("/")
 def health_check():
     return {
-        "status": "BalancedBora Gruwe-Kuku v2.1 is running 🐷🐔",
+        "status": "BalancedBora Gruwe-Kuku v2.2 is running 🐷🐔",
         "features": ["pig_profiles", "chicken_profiles", "nrc_lp", "best_effort_mode", "ai_suggestions", 
-                     "image_recognition", "21_feeds", "native_translations", "background_tasks", "lru_cache", 
-                     "supplier_matching", "gemini_nlp", "recommendation_engine", "session_memory"],
+                     "image_recognition", "22_feeds", "native_translations", "background_tasks", "lru_cache", 
+                     "supplier_matching", "gemini_nlp", "recommendation_engine", "session_memory", "robust_errors"],
         "vision_configured": bool(GOOGLE_API_KEY),
         "gemini_configured": bool(GEMINI_API_KEY),
         "sessions": len(user_sessions),
