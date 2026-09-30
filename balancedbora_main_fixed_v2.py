@@ -65,6 +65,23 @@ user_sessions = {}
 # ============================================================
 LANG_MAP = {'1': 'en', '2': 'sw', '3': 'ki', '4': 'mer'}
 
+CONSENT_TEXT = (
+    "🐷🐔 *Welcome to BalancedBora!*\n\n"
+    "Before we start, please read our privacy notice:\n\n"
+    "📋 *What we collect:*\n"
+    "• Your WhatsApp number (so we can reply)\n"
+    "• The animal type and feeds you choose\n"
+    "• Optional photos you send of feed bags\n\n"
+    "🔒 *What we do NOT collect:*\n"
+    "• Your name, ID, or location\n"
+    "• Payment information\n\n"
+    "💾 Your data is used ONLY to calculate your ration. "
+    "We never sell or share it.\n\n"
+    "📜 Full privacy statement:\n"
+    "https://davidmarii.github.io/BalancedBora/privacy.html\n\n"
+    "Reply *AGREE* to continue. Reply *STOP* at any time to unsubscribe."
+)
+
 MESSAGES = {
     'en': {
         'welcome': "🐷🐔 Welcome to BalancedBora Gruwe-Kuku!\n\nI calculate the cheapest balanced ration for your pigs or chickens using NRC science.",
@@ -426,6 +443,22 @@ FEEDS_DB = {
         'category': 'protein', 'notes': 'Moderate protein, high fiber'
     },
 }
+
+# ─── Attach SQLite-derived composition ────────────────────────────────────
+from feed_database import INGREDIENT_DB, merge_composition  # noqa: E402
+from consent import (
+    has_consented, record_consent, is_suppressed,
+    suppress, unsuppress, count_consents,
+    STOP_WORDS, START_WORDS, CONSENT_VERSION,
+)
+
+FEEDS_DB = merge_composition(FEEDS_DB, INGREDIENT_DB)
+
+_db_sourced = [k for k, v in FEEDS_DB.items() if v.get("_source") == "sqlite"]
+_hardcoded  = [k for k, v in FEEDS_DB.items() if v.get("_source") == "hardcoded"]
+print(f"[FEEDS_DB] {len(_db_sourced)} feeds using SQLite composition: {_db_sourced}")
+print(f"[FEEDS_DB] {len(_hardcoded)} feeds using hardcoded composition: {_hardcoded}")
+# ─────────────────────────────────────────────────────────────────────────
 
 # ============================================================
 # ANIMAL PROFILES — PIGS (NRC 2012)
@@ -1085,6 +1118,38 @@ async def whatsapp_webhook(
     except (TypeError, ValueError):
         num_media = 0
 
+    # ─── CONSENT GATE ────────────────────────────────────────────
+    resp = MessagingResponse()
+    msg = resp.message()
+
+    def _xml():
+        return Response(content=str(resp), media_type='application/xml')
+
+    if text_lower in STOP_WORDS:
+        suppress(phone, text_lower)
+        msg.body('You have been unsubscribed. Reply START to resume.')
+        return _xml()
+
+    if is_suppressed(phone):
+        if text_lower not in START_WORDS:
+            return _xml()
+        unsuppress(phone)
+
+    if not has_consented(phone):
+        if text_lower in {'agree', 'i agree', 'ndiyo', 'ndio', 'sawa', 'yes'}:
+            record_consent(
+                phone,
+                consent_text=CONSENT_TEXT,
+                ip_address=request.client.host if request.client else None,
+            )
+            msg.body('✅ Thank you! Your consent has been recorded.\n\n'
+                     'Send *START* to calculate your first balanced ration.')
+            return _xml()
+        else:
+            msg.body(CONSENT_TEXT)
+            return _xml()
+    # ─── END CONSENT GATE ────────────────────────────────────────
+
     if phone not in user_sessions:
         user_sessions[phone] = {'step': -1, 'lang': 'en', 'history': []}
     session = user_sessions[phone]
@@ -1097,12 +1162,6 @@ async def whatsapp_webhook(
     session.setdefault('recommended_feeds', [])
     session.setdefault('history', [])
     session.setdefault('ai_detected_feeds', None)
-
-    resp = MessagingResponse()
-    msg = resp.message()
-
-    def xml_response():
-        return Response(content=str(resp), media_type="application/xml")
 
     def parse_feed_numbers_local(raw_text: str):
         """Extract feed menu numbers and natural-language feed names locally."""
@@ -1264,24 +1323,24 @@ async def whatsapp_webhook(
         detected, error = detect_feeds_from_image(MediaUrl0)
         if error:
             msg.body(error + "\n\n" + get_msg(phone, 'generic_help'))
-            return xml_response()
+            return _xml()
         if not detected:
             msg.body(get_msg(phone, 'photo_not_found') + "\n\n" + get_msg(phone, 'generic_help'))
-            return xml_response()
+            return _xml()
         session['ai_detected_feeds'] = detected
         feed_names = [
             FEEDS_DB[FEED_NUMBER_MAP[n]]['name']
             for n in detected if n in FEED_NUMBER_MAP
         ]
         msg.body(get_msg(phone, 'photo_detected', feeds=', '.join(feed_names)))
-        return xml_response()
+        return _xml()
 
     # ============================================================
     # VOICE
     # ============================================================
     if num_media > 0 and 'audio' in MediaContentType0:
         msg.body(get_msg(phone, 'voice_soon') + "\n\n" + get_msg(phone, 'generic_help'))
-        return xml_response()
+        return _xml()
 
     # ============================================================
     # START / RESET
@@ -1304,7 +1363,7 @@ async def whatsapp_webhook(
 
         # Do not force language selection on every START. Preserve selected language.
         msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
-        return xml_response()
+        return _xml()
 
     # ============================================================
     # PHOTO CONFIRMATION
@@ -1316,8 +1375,8 @@ async def whatsapp_webhook(
         session['feeds'] = list(dict.fromkeys(session.get('feeds', []) + detected_ids))
         # Calculate immediately when animal/stage are already known; otherwise ask only for what's missing.
         if validate_and_start_calculation():
-            return xml_response()
-        return xml_response()
+            return _xml()
+        return _xml()
 
     # ============================================================
     # FIRST: UNDERSTAND COMPLETE NATURAL-LANGUAGE MESSAGES
@@ -1375,7 +1434,7 @@ async def whatsapp_webhook(
         # If the local model has enough information, formulate without Gemini.
         if session.get('species') and session.get('profile') and len(session.get('feeds', [])) >= 2:
             validate_and_start_calculation()
-            return xml_response()
+            return _xml()
 
         # Gemini remains the fallback for difficult/free-form messages.
         if gemini_client and len(text) > 2:
@@ -1384,7 +1443,7 @@ async def whatsapp_webhook(
                 apply_parsed_data(gemini_data)
                 if session.get('species') and session.get('profile') and len(session.get('feeds', [])) >= 2:
                     validate_and_start_calculation()
-                    return xml_response()
+                    return _xml()
 
     # ============================================================
     # SIMPLE MENU FLOW (kept as an easy fallback)
@@ -1394,7 +1453,7 @@ async def whatsapp_webhook(
             msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
         else:
             msg.body(get_msg(phone, 'generic_help'))
-        return xml_response()
+        return _xml()
 
     # Language selection is retained for users who prefer the menu.
     if session['step'] == -1:
@@ -1405,7 +1464,7 @@ async def whatsapp_webhook(
         else:
             session['step'] = 1
             msg.body(get_msg(phone, 'welcome') + "\n\n" + get_msg(phone, 'choose_species'))
-        return xml_response()
+        return _xml()
 
     # Step 1: species
     if session['step'] == 1:
@@ -1419,7 +1478,7 @@ async def whatsapp_webhook(
             msg.body(get_msg(phone, 'choose_chicken'))
         else:
             msg.body(get_msg(phone, 'invalid_choice') + "\n\n" + get_msg(phone, 'choose_species'))
-        return xml_response()
+        return _xml()
 
     # Step 2: animal stage/profile
     if session['step'] == 2:
@@ -1431,7 +1490,7 @@ async def whatsapp_webhook(
             session['step'] = 3
             feed_key = 'feed_selection_pig' if species == 'pig' else 'feed_selection_chicken'
             msg.body(get_msg(phone, feed_key))
-            return xml_response()
+            return _xml()
 
         if gemini_client and len(text) > 2:
             data = gemini_parse_natural_language(text, session.get('lang', 'en'))
@@ -1439,15 +1498,15 @@ async def whatsapp_webhook(
                 apply_parsed_data(data)
                 if session.get('profile') and len(session.get('feeds', [])) >= 2:
                     validate_and_start_calculation()
-                    return xml_response()
+                    return _xml()
                 if session.get('profile'):
                     session['step'] = 3
                     feed_key = 'feed_selection_pig' if species == 'pig' else 'feed_selection_chicken'
                     msg.body(get_msg(phone, feed_key))
-                    return xml_response()
+                    return _xml()
 
         msg.body(get_msg(phone, 'invalid_choice') + "\n\n" + get_msg(phone, 'choose_pig' if species == 'pig' else 'choose_chicken'))
-        return xml_response()
+        return _xml()
 
     # Step 3: feed entry. Any valid feed list is now calculated immediately.
     if session['step'] in [3, 4, 0]:
@@ -1455,18 +1514,18 @@ async def whatsapp_webhook(
         if feed_ids:
             session['feeds'] = list(dict.fromkeys(session.get('feeds', []) + feed_ids))
             if validate_and_start_calculation():
-                return xml_response()
-            return xml_response()
+                return _xml()
+            return _xml()
 
         # Special case: if the user sends YES after a previous recommendation message,
         # retain compatibility but calculate using currently selected feeds only.
         if text_lower in ['yes', 'yep', 'sawa', 'correct', 'ndio', 'ii', 'ndiyo', 'sawa sawa']:
             if validate_and_start_calculation():
-                return xml_response()
+                return _xml()
 
         feed_key = 'feed_selection_pig' if session.get('species') == 'pig' else 'feed_selection_chicken'
         msg.body(get_msg(phone, 'select_at_least_2') + "\n\n" + get_msg(phone, feed_key))
-        return xml_response()
+        return _xml()
 
     # ============================================================
     # LAST-CHANCE GEMINI PARSER
@@ -1477,10 +1536,10 @@ async def whatsapp_webhook(
             apply_parsed_data(data)
             if session.get('species') and session.get('profile') and len(session.get('feeds', [])) >= 2:
                 validate_and_start_calculation()
-                return xml_response()
+                return _xml()
 
     msg.body(get_msg(phone, 'generic_help'))
-    return xml_response()
+    return _xml()
 
 
 # ============================================================
@@ -1498,6 +1557,11 @@ def health_check():
         "gemini_configured": bool(GEMINI_API_KEY),
         "gemini_model": GEMINI_MODEL,
         "sessions": len(user_sessions),
+        # ─── SQLite DB status ────────────────────────────────────
+        "ingredient_db_loaded": len(INGREDIENT_DB) if "INGREDIENT_DB" in globals() else 0,
+        "feeds_using_sqlite": sorted([k for k, v in FEEDS_DB.items() if v.get("_source") == "sqlite"]),
+        "feeds_using_hardcoded": sorted([k for k, v in FEEDS_DB.items() if v.get("_source") == "hardcoded"]),
+        # ─────────────────────────────────────────────────────────
         "cache_info": str(cached_solve_ration.cache_info())
     }
 
