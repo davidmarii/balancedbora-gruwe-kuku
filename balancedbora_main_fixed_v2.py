@@ -1,5 +1,5 @@
 # ============================================================
-# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.2
+# BALANCEDBORA GRUWE-KUKU — PIG & POULTRY BOT v2.3
 # Fixes: Model 404 (gemini-2.5-flash deprecated), session memory,
 #        recommendation engine, no looping, local text parsing,
 #        smart natural language flow, accurate least-cost LP
