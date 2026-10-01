@@ -1560,8 +1560,7 @@ def health_check():
                      "image_recognition", "21_feeds", "native_translations", "background_tasks", "lru_cache", 
                      "supplier_matching", "gemini_nlp", "recommendation_engine", "session_memory",
                      "local_text_parsing", "no_looping"],
-        "vision_configured": bool(GOOGLE_API_KEY),
-        "gemini_configured": bool(GEMINI_API_KEY),
+        "vision_configured": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")),
         "gemini_model": GEMINI_MODEL,
         "sessions": len(user_sessions),
         # ─── SQLite DB status ────────────────────────────────────
