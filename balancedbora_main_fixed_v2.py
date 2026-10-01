@@ -4,7 +4,8 @@
 #        recommendation engine, no looping, local text parsing,
 #        smart natural language flow, accurate least-cost LP
 # ============================================================
-
+import base64
+from google.cloud import vision as vision_client
 import os
 import requests
 import base64
@@ -853,18 +854,18 @@ FEED_LABELS = {
 }
 
 def detect_feeds_from_image(image_url):
-    if not GOOGLE_API_KEY:
-        return None, "⚠️ Image recognition not configured."
+    """Use Cloud Vision (service account JSON) to label a feed photo."""
+    try:
+        vc = vision_client.ImageAnnotatorClient()
+    except Exception as e:
+        return None, f"⚠️ Vision not configured: {e}"
     try:
         img_data = requests.get(image_url, timeout=10).content
-        encoded = base64.b64encode(img_data).decode('utf-8')
-        vision_url = f"https://vision.googleapis.com/v1/images:annotate?key={GOOGLE_API_KEY}"
-        payload = {"requests": [{"image": {"content": encoded}, "features": [{"type": "LABEL_DETECTION", "maxResults": 15}]}]}
-        resp = requests.post(vision_url, json=payload, timeout=15)
-        result = resp.json()
-        if 'error' in result:
-            return None, f"Vision API error: {result['error']['message']}"
-        labels = [a['description'].lower() for a in result['responses'][0].get('labelAnnotations', [])]
+        image = vision_client.Image(content=img_data)
+        response = vc.label_detection(image=image, max_results=15)
+        if response.error.message:
+            return None, f"Vision API error: {response.error.message}"
+        labels = [a.description.lower() for a in response.label_annotations]
         detected = set()
         for label in labels:
             for keyword, feed_num in FEED_LABELS.items():
