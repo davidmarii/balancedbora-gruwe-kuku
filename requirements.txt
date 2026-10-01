@@ -2,7 +2,7 @@ fastapi
 uvicorn
 python-multipart
 twilio
-pulp
+pulp==2.9.0
 python-dotenv
 requests
 google-genai
