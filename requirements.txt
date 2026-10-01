@@ -6,3 +6,4 @@ pulp==2.9.0
 python-dotenv
 requests
 google-genai
+google-cloud-vision
