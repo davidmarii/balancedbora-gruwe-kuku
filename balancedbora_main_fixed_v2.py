@@ -725,7 +725,7 @@ def solve_ration(profile_key, selected_feeds):
 
     nutrients = ['cp', 'me', 'lysine', 'ca', 'p', 'cf', 'fat', 'ash']
     prob = pulp.LpProblem(f"Ration_{profile_key}", pulp.LpMinimize)
-    feed_vars = {fid: pulp.LpVariable(f"Feed_{fid}", lowBound=0, upBound=100) for fid in available}
+    feed_vars = {fid: pulp.LpVariable(f"Feed_{fid}") for fid in available}
     prob += pulp.lpSum([feed_vars[fid] * available[fid]['cost_kg'] for fid in available])
     prob += pulp.lpSum([feed_vars[fid] for fid in available]) == 100
     for nutrient in nutrients:
@@ -741,7 +741,7 @@ def solve_ration(profile_key, selected_feeds):
 
     if not strict_optimal:
         prob2 = pulp.LpProblem(f"Ration_{profile_key}_besteffort", pulp.LpMinimize)
-        feed_vars2 = {fid: pulp.LpVariable(f"FeedBE_{fid}", lowBound=0, upBound=100) for fid in available}
+        feed_vars2 = {fid: pulp.LpVariable(f"FeedBE_{fid}") for fid in available}
         slack_under = {}; slack_over = {}
         for nutrient in nutrients:
             if nutrient in profile:
