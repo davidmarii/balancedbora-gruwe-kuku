@@ -176,7 +176,7 @@ MESSAGES = {
         'notes_header': "MAELEZO:",
         'calculating': "⏳ Nakuhesabu chakula bora kwa bei nafuu…\nTafadhali subiri sekunde 5.",
         'supplier_header': "📦 MAHALI PA KUNUNUA:",
-        'supplier_item': "• {name} — {phone} ({location}) — {stock}",
+        'supplier_item': "• {name} — {supplier_phone} ({location}) — {stock}",
         'supplier_na': "📦 Taarifa ya muuzaji bado haijawekwa. Ongeza mawasiliano ya agrovet yako.",
         'recommendations_header': "📋 MAPENDEKEZO KWA CHAKULA CHAKO:",
         'rec_energy': "⚡ Unahitaji chanzo cha NISHATI (k.m. Mahindi #1, Makapi ya Ngano #2) kwa ukuaji na afya ya mwili.",
@@ -231,7 +231,7 @@ MESSAGES = {
         'notes_header': "MAELEZO:",
         'calculating': "⏳ Nîndîrathîrîria irio rîtheru na bei ncheene…\nTafadhali rîgîra thiguku 5.",
         'supplier_header': "📦 MAHALI PA KûGûRA:",
-        'supplier_item': "• {name} — {phone} ({location}) — {stock}",
+        'supplier_item': "• {name} — {supplier_phone} ({location}) — {stock}",
         'supplier_na': "📦 Taarifa ya mûgûrî bado ti îkî. Ongeza mawasiliano ya agrovet yaku.",
         'recommendations_header': "📋 MAENDELEZO KWA IRIO RÎAKU:",
         'rec_energy': "⚡ Wîna bata ciana cia HOTI (k.m. Mûbî #1, Makapi ma Ngano #2) kwa ukuaji na ûhooro wa mwîrî.",
@@ -286,7 +286,7 @@ MESSAGES = {
         'notes_header': "MAELEZO:",
         'calculating': "⏳ Ntathimana irio theru na bei ncheene…\nTafadhali rîgîra thiguku 5.",
         'supplier_header': "📦 MAHALI PA KûGûRA:",
-        'supplier_item': "• {name} — {phone} ({location}) — {stock}",
+        'supplier_item': "• {name} — {supplier_phone} ({location}) — {stock}",
         'supplier_na': "📦 Taarifa ya mûgûrî bado ti îkî. Ongeza mawasiliano ya agrovet yaku.",
         'recommendations_header': "📋 MAENDELEZO KWA IRIO RÎAKU:",
         'rec_energy': "⚡ Wîna bata ciana cia HOTI (k.m. Mûbî #1, Makapi ma Ngano #2) kwa ukuaji na ûhooro wa mwîrî.",
@@ -926,7 +926,7 @@ def format_suppliers(user_phone, feed_ids):
         msg += m(
             'supplier_item',
             name=sup['name'],
-            phone=sup['phone'],
+            supplier_phone=sup['phone'],
             location=sup['location'],
             stock=sup['stock']
         ) + "\n"
