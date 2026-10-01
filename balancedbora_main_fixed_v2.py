@@ -937,32 +937,38 @@ def format_suppliers(user_phone, feed_ids):
 # BACKGROUND TASK
 # ============================================================
 def process_ration_and_reply(phone: str, profile_key: str, feed_ids: list, lang: str, species: str):
+    print(f"[BG TASK] START {phone} profile={profile_key} feeds={feed_ids}")
     start = time.time()
-    if phone not in user_sessions:
-        user_sessions[phone] = {}
-    user_sessions[phone]['lang'] = lang
-    result, error = cached_solve_ration(profile_key, tuple(sorted(feed_ids)))
-    solve_time = (time.time() - start) * 1000
-    print(f"[BG TASK] Solved ration for {phone} in {solve_time:.0f}ms")
+    user_sessions.setdefault(phone, {})['lang'] = lang
 
-    if error and isinstance(error, str) and error.startswith("❌"):
-        reply_text = error
-    elif error == "NO_ENERGY":
+    try:
+        result, error = cached_solve_ration(profile_key, tuple(sorted(feed_ids)))
+    except Exception as e:
+        print(f"[BG TASK] SOLVER CRASH {phone}: {e}")
+        import traceback; traceback.print_exc()
+        result, error = None, f"⚠️ Calculation failed: {e}"
+
+    print(f"[BG TASK] SOLVED in {(time.time()-start)*1000:.0f}ms error={error}")
+
+    if error == "NO_ENERGY":
         reply_text = get_msg(phone, 'no_energy_error')
-    elif error and isinstance(error, tuple) and error[0] == "IMPOSSIBLE_MINS":
+    elif isinstance(error, tuple) and error[0] == "IMPOSSIBLE_MINS":
         reply_text = get_msg(phone, 'impossible_mins', total_min=error[1], offenders=', '.join(error[2]))
+    elif error:
+        reply_text = str(error) if str(error).startswith("❌") else "⚠️ " + str(error)
     else:
         reply_text = format_ration(phone, result, species)
         reply_text += format_suppliers(phone, feed_ids)
 
-    if client:
-        try:
-            client.messages.create(from_=TWILIO_NUMBER, body=reply_text, to=f"whatsapp:{phone}")
-            print(f"[BG TASK] Result sent to {phone}")
-        except Exception as e:
-            print(f"[BG TASK] FAILED to send to {phone}: {e}")
-    else:
-        print(f"[BG TASK] No Twilio client, cannot send to {phone}")
+    if client is None:
+        print("[BG TASK] ERROR: Twilio client is None — check TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN env vars!")
+        return
+
+    try:
+        client.messages.create(from_=TWILIO_NUMBER, body=reply_text, to=f"whatsapp:{phone}")
+        print(f"[BG TASK] SENT to {phone}")
+    except Exception as e:
+        print(f"[BG TASK] SEND FAILED to {phone}: {e}")
 
 
 # ============================================================
