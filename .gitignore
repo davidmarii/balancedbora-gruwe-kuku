@@ -43,5 +43,9 @@ Thumbs.db
 static/*
 !static/.gitkeep
 
+# Runtime consent database (contains phone numbers — must not be committed)
+consent.db
+consent.db-journal
+
 # Logs
 *.log
